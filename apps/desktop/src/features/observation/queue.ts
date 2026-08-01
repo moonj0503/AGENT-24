@@ -2,10 +2,12 @@ import type { ActivityEvent } from "@continuity/contracts";
 
 export interface QueueLimits { readonly maximumEvents: number; readonly maximumAgeMs: number; }
 export const DEFAULT_QUEUE_LIMITS: QueueLimits = { maximumEvents: 5_000, maximumAgeMs: 7 * 24 * 60 * 60_000 };
+const SYSTEM_BLOCKED_APPLICATIONS = new Set(["continuity-desktop"]);
 
 export function normalizeApplicationIdentifier(value: string): string { return value.trim().toLocaleLowerCase(); }
 export function isApplicationBlocked(event: ActivityEvent, blocked: readonly string[]): boolean {
-  return blocked.includes(normalizeApplicationIdentifier(event.application.name));
+  const application = normalizeApplicationIdentifier(event.application.name);
+  return SYSTEM_BLOCKED_APPLICATIONS.has(application) || blocked.includes(application);
 }
 export function boundedObservationQueue(events: readonly ActivityEvent[], now: number, limits = DEFAULT_QUEUE_LIMITS): { events: ActivityEvent[]; trimmed: boolean } {
   const unique = new Map<string, ActivityEvent>();
