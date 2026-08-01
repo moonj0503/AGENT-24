@@ -1,11 +1,11 @@
 import type { ActionPlan } from "@continuity/contracts";
 import type { GapData } from "../../features/gap/api";
-import { dismissOverlay } from "../overlay-store";
+import { dismissOverlayWithAnimation } from "../overlay-store";
 
 export function ApprovalOverlay({ gap, actionId, onDecision, onOpenDetails }: { gap: GapData; actionId: string; onDecision: (actionId: string, status: "COMPLETED" | "REJECTED") => Promise<void>; onOpenDetails: () => void }) {
   const action = gap.plan.actions.find((item) => item.actionId === actionId);
   if (!action || action.status !== "WAITING_APPROVAL") return null;
-  const decide = (status: "COMPLETED" | "REJECTED") => void onDecision(actionId, status).then(dismissOverlay);
+  const decide = (status: "COMPLETED" | "REJECTED") => void onDecision(actionId, status).then(dismissOverlayWithAnimation);
   return <section className="overlay-card" aria-labelledby="overlay-approval-title">
     <div className="overlay-intro">
       <p className="eyebrow">ACTION APPROVAL</p>

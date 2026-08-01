@@ -1,4 +1,5 @@
 import type { GoalCandidate, GoalInferenceResult, RecoveryBrief } from "@continuity/contracts";
+import type { ReactNode } from "react";
 import type { GapData } from "../features/gap/api";
 import { useOverlaySnapshot } from "./overlay-store";
 import { GoalConfirmationOverlay } from "./components/GoalConfirmationOverlay";
@@ -17,9 +18,11 @@ export function OverlayRoot({ handlers, inference }: { handlers: OverlayHandlers
   const snapshot = useOverlaySnapshot();
   const currentInference = snapshot.inference ?? inference;
   if (snapshot.state === "HIDDEN") return null;
-  if (snapshot.state === "GOAL_CONFIRMATION" && currentInference) return <GoalConfirmationOverlay inference={currentInference} onSelect={handlers.onGoalSelected} onOpenDetails={() => handlers.onOpenMain("goal")} />;
-  if (snapshot.state === "GAP_START_CONFIRMATION") return <GapStartOverlay goal={snapshot.selectedGoal} gap={snapshot.gap} onConfirm={handlers.onConfirmGapStart} onOpenDetails={() => handlers.onOpenMain("gap")} />;
-  if (snapshot.state === "APPROVAL_REQUIRED" && snapshot.gap && snapshot.actionId) return <ApprovalOverlay gap={snapshot.gap} actionId={snapshot.actionId} onDecision={handlers.onApproval} onOpenDetails={() => handlers.onOpenMain("gap")} />;
-  if (snapshot.state === "RECOVERY_READY" && snapshot.brief) return <RecoveryNotificationOverlay brief={snapshot.brief} onOpenDetails={() => handlers.onOpenMain("recovery")} />;
-  return <div className="overlay-empty" aria-live="polite">No action needs your attention.</div>;
+  let content: ReactNode;
+  if (snapshot.state === "GOAL_CONFIRMATION" && currentInference) content = <GoalConfirmationOverlay inference={currentInference} onSelect={handlers.onGoalSelected} onOpenDetails={() => handlers.onOpenMain("goal")} />;
+  else if (snapshot.state === "GAP_START_CONFIRMATION") content = <GapStartOverlay goal={snapshot.selectedGoal} gap={snapshot.gap} onConfirm={handlers.onConfirmGapStart} onOpenDetails={() => handlers.onOpenMain("gap")} />;
+  else if (snapshot.state === "APPROVAL_REQUIRED" && snapshot.gap && snapshot.actionId) content = <ApprovalOverlay gap={snapshot.gap} actionId={snapshot.actionId} onDecision={handlers.onApproval} onOpenDetails={() => handlers.onOpenMain("gap")} />;
+  else if (snapshot.state === "RECOVERY_READY" && snapshot.brief) content = <RecoveryNotificationOverlay brief={snapshot.brief} onOpenDetails={() => handlers.onOpenMain("recovery")} />;
+  else content = <div className="overlay-empty" aria-live="polite">No action needs your attention.</div>;
+  return <div className={`overlay-panel${snapshot.isClosing ? " is-closing" : ""}`}>{content}</div>;
 }
