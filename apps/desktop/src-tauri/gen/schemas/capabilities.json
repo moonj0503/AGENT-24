@@ -1,1 +1,1 @@
-{}
+{"default":{"identifier":"default","description":"Allow the desktop windows to communicate through Tauri events.","local":true,"windows":["main","quick-overlay"],"permissions":["core:event:allow-listen","core:event:allow-emit"]}}

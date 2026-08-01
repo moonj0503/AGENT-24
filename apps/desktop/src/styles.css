@@ -27,6 +27,7 @@
   --color-primary-border: rgb(144 213 255 / 28%);
   --color-secondary-border: rgb(119 177 212 / 24%);
   --color-error-border: rgb(214 87 87 / 24%);
+  --color-backdrop: rgb(23 43 58 / 30%);
 
   --shadow-card: 0 10px 28px rgb(31 78 104 / 7%);
   --shadow-focus: 0 0 0 3px rgb(87 185 255 / 30%);
@@ -136,6 +137,51 @@ button:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
 .error { background: var(--color-error-soft); color: var(--color-error); border: 1px solid var(--color-error-border); padding: 12px 16px; border-radius: 8px; margin: -18px 0 22px; font-size: 13px; }
 .error button { float: right; border: 0; background: none; color: inherit; cursor: pointer; text-decoration: underline; }
 .empty { padding: 30px; color: var(--color-text-muted); background: var(--color-surface); border: 1px dashed var(--color-border-strong); border-radius: 12px; text-align: center; }
+.button.secondary { background: var(--color-surface); color: var(--color-primary-dark); border: 1px solid var(--color-border-strong); }
+.button.secondary:hover { background: var(--color-surface-subtle); }
+.text-button { border: 0; padding: 10px 0; background: transparent; color: var(--color-primary-dark); font: inherit; font-weight: 700; cursor: pointer; }
+.overlay-shell { width: 100%; height: 100%; min-height: 0; display: grid; place-items: center; padding: 6px; overflow: hidden; background: var(--color-background); }
+html:has(.overlay-shell), body:has(.overlay-shell), body:has(.overlay-shell) #root { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+.overlay-empty { width: min(100%, 430px); padding: 28px; text-align: center; color: var(--color-text-secondary); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 16px; box-shadow: var(--shadow-card); }
+.overlay-card { position: relative; width: 100%; max-height: 100%; padding: 8px; overflow: hidden; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: var(--shadow-card); overflow-wrap: anywhere; }
+.overlay-card .eyebrow { margin-bottom: 6px; font-size: 9px; }
+.overlay-card h2 { margin: 0 0 4px; font-size: 18px; letter-spacing: -.03em; }
+.overlay-copy { margin: 0 0 4px; color: var(--color-text-secondary); line-height: 1.25; }
+.overlay-options { display: grid; gap: 5px; }
+.overlay-option { display: flex; align-items: flex-start; gap: 8px; width: 100%; padding: 8px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); text-align: left; font: inherit; cursor: pointer; }
+.overlay-option:hover { border-color: var(--color-primary); background: var(--color-surface-subtle); }
+.overlay-option span { flex: 1; }
+.overlay-option strong, .overlay-option small { display: block; }
+.overlay-option small { margin-top: 1px; color: var(--color-text-secondary); font-size: 10px; }
+.overlay-option b { color: var(--color-primary-dark); }
+.overlay-summary { display: grid; gap: 4px; padding: 10px; margin: 10px 0; border-radius: 8px; background: var(--color-surface-subtle); }
+.overlay-summary span { color: var(--color-text-secondary); font-size: 13px; }
+.overlay-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 10px; }
+.overlay-actions .button { padding: 8px 12px; font-size: 13px; }
+.overlay-actions .text-button { padding: 6px 0; font-size: 13px; }
+.overlay-facts { display: grid; gap: 6px; margin: 0; }
+.overlay-facts div { display: flex; justify-content: space-between; gap: 10px; padding-bottom: 5px; border-bottom: 1px solid var(--color-border); }
+.overlay-facts dt, .overlay-facts dd { margin: 0; font-size: 12px; }
+.overlay-facts dt { color: var(--color-text-muted); }
+.overlay-facts dd { color: var(--color-text-primary); text-align: right; }
+.overlay-recommendation { display: grid; gap: 4px; padding: 10px; margin: 10px 0 0; border-left: 3px solid var(--color-primary); background: var(--color-surface-subtle); }
+.overlay-recommendation span { color: var(--color-text-muted); font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.overlay-dismiss { display: none; }
+.main-overlay-backdrop { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 20px; background: var(--color-backdrop); }
+.preview-page { min-height: 100vh; padding: 42px 5vw 34px; background: var(--color-background); }
+.preview-header { display: flex; align-items: flex-start; justify-content: space-between; max-width: 1180px; margin: 0 auto 24px; }
+.preview-header h1 { margin: 0 0 8px; font-size: 32px; letter-spacing: -.04em; }
+.preview-header p:not(.eyebrow) { margin: 0; color: var(--color-text-secondary); }
+.preview-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; max-width: 1180px; margin: 0 auto 12px; padding: 14px; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 12px; box-shadow: var(--shadow-card); }
+.preview-controls strong { margin-right: 6px; font-size: 13px; }
+.preview-feedback { max-width: 1180px; min-height: 20px; margin: 0 auto 14px; color: var(--color-primary-dark); font-size: 13px; }
+.preview-stage { position: relative; min-height: 650px; max-width: 1180px; margin: 0 auto; overflow: hidden; border: 1px solid var(--color-border); border-radius: 18px; background: linear-gradient(135deg, var(--color-surface), var(--color-surface-subtle)); box-shadow: var(--shadow-card); }
+.preview-stage::after { position: absolute; inset: 0; z-index: 0; background-image: radial-gradient(var(--color-border) 1px, transparent 1px); background-size: 24px 24px; opacity: .32; content: ""; }
+.preview-stage-label { position: absolute; top: 22px; left: 24px; z-index: 1; color: var(--color-text-muted); font-size: 11px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.preview-overlay { position: absolute; right: 28px; bottom: 28px; z-index: 2; width: min(430px, calc(100% - 56px)); }
+.preview-overlay .overlay-card { width: 100%; }
+.preview-hidden, .preview-loading { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; color: var(--color-text-muted); font-size: 14px; }
+.preview-note { max-width: 1180px; margin: 14px auto 0; color: var(--color-text-muted); font-size: 12px; }
 
 @media (max-width: 760px) {
   .sidebar { width: 68px; padding: 20px 8px; }

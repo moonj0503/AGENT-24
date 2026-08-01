@@ -1,7 +1,8 @@
 import type { RecoveryBrief } from "@continuity/contracts";
 
-const recoveryBrief: RecoveryBrief = {
+const recoveryBrief: RecoveryBrief & { gapDurationSeconds: number } = {
   briefId: "brief-001", gapId: "gap-001",
+  gapDurationSeconds: 2280,
   goalBeforeGap: "Final Project / Report Writing / QR Factorization",
   completedActions: ["Created an outline for the next paragraph", "Organized 3 references"],
   pendingActions: ["Message draft awaiting approval"], externalEffects: [],
