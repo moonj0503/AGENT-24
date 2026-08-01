@@ -1,23 +1,36 @@
-import type { ActionPlan, Checkpoint, CreateCheckpointRequest, GapSession, PlannedAction, RecoveryBrief, RunGapRecoveryResponse } from "@continuity/contracts";
-import { apiRequest } from "../../lib/api";
+import type { ActionPlan, GapSession } from "@continuity/contracts";
 
-export type GapData = { session: GapSession; plan: ActionPlan; recoveryBrief: RecoveryBrief };
-export type GapStartContext = Omit<CreateCheckpointRequest, "goalId"> & { workSessionId: string; goalId: string };
+export type GapData = { session: GapSession; plan: ActionPlan };
 
-export async function startGap(context: GapStartContext): Promise<GapData> {
-  const { workSessionId, goalId, ...checkpointRequest } = context;
-  const checkpoint = await apiRequest<Checkpoint>("/checkpoints", { method: "POST", body: JSON.stringify({ goalId, ...checkpointRequest }) });
-  const session = await apiRequest<GapSession>("/gaps", { method: "POST", body: JSON.stringify({ workSessionId, goalId, checkpointId: checkpoint.checkpointId }) });
-  const recovery = await apiRequest<RunGapRecoveryResponse>(`/gaps/${session.gapId}/run`, { method: "POST", body: JSON.stringify({ goalId, checkpointId: checkpoint.checkpointId }) });
-  return { session, plan: recovery.actionPlan, recoveryBrief: recovery.recoveryBrief };
+const gapData: GapData = {
+  session: {
+    gapId: "gap-001", workSessionId: "ws-001", goalId: "goal-001", checkpointId: "cp-001",
+    status: "EXECUTING", startedAt: "2026-08-01T09:10:00.000Z",
+  },
+  plan: {
+    planId: "plan-001", gapId: "gap-001",
+    continuityObjective: "Preserve the report-writing workflow and minimize recovery cost.",
+    actions: [
+      { actionId: "act-001", type: "CREATE_TODO_DRAFT", title: "Draft next-paragraph outline", reason: "Preserve the next writing step.", riskLevel: "LOW", reversible: true, status: "COMPLETED" },
+      { actionId: "act-002", type: "CREATE_MESSAGE_DRAFT", title: "Prepare team update", reason: "Keep teammates informed without sending a message.", riskLevel: "MEDIUM", reversible: true, status: "WAITING_APPROVAL" },
+      { actionId: "act-003", type: "ORGANIZE_REFERENCES", title: "Organize QR references", reason: "Make relevant references easier to recover.", riskLevel: "LOW", reversible: true, status: "PLANNED" },
+    ],
+  },
+};
+
+/** Read-only fixture access for the development preview; it never starts a gap. */
+export function getGapPreviewData(): GapData {
+  return structuredClone(gapData);
 }
 
-export async function updateAction(gap: GapData, actionId: string, decision: "APPROVE" | "REJECT"): Promise<GapData> {
-  const updated = await apiRequest<PlannedAction>(`/gaps/${gap.session.gapId}/actions/${actionId}/approval`, { method: "POST", body: JSON.stringify({ decision }) });
-  return { ...gap, plan: { ...gap.plan, actions: gap.plan.actions.map((action) => action.actionId === actionId ? updated : action) } };
+export async function startGap(): Promise<GapData> {
+  return structuredClone(gapData);
 }
 
-export async function endGap(gap: GapData): Promise<GapData> {
-  const session = await apiRequest<GapSession>(`/gaps/${gap.session.gapId}/end`, { method: "POST", body: JSON.stringify({}) });
-  return { ...gap, session };
+export async function updateAction(actionId: string, status: "COMPLETED" | "REJECTED"): Promise<GapData> {
+  const next = structuredClone(gapData);
+  const action = next.plan.actions.find((item) => item.actionId === actionId);
+  if (!action) throw new Error("Action not found.");
+  action.status = status;
+  return next;
 }
