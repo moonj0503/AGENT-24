@@ -5,3 +5,5 @@ export * from "./gap.js";
 export * from "./action.js";
 export * from "./recovery.js";
 export * from "./events.js";
+export * from "./http.js";
+export * from "./errors.js";
