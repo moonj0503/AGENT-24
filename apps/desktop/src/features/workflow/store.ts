@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from "react";
 import type { ActionPlan, ActionResult, Checkpoint, GapSession, Goal, RecoveryBrief } from "@continuity/contracts";
 
-export type DesktopWorkflowPhase = "OBSERVING" | "GOAL_CONFIRMATION" | "READY_FOR_GAP" | "STARTING_GAP" | "GAP_ACTIVE" | "AWAITING_APPROVAL" | "ENDING_GAP" | "RECOVERY_READY" | "FAILED";
+export type DesktopWorkflowPhase = "OBSERVING" | "IDENTIFYING_GOAL" | "GOAL_CONFIRMATION" | "READY_FOR_GAP" | "STARTING_GAP" | "GAP_ACTIVE" | "AWAITING_APPROVAL" | "ENDING_GAP" | "RECOVERY_READY" | "FAILED";
 export interface DesktopWorkflowState {
   readonly workSessionId: string;
   readonly confirmedGoal?: Goal;

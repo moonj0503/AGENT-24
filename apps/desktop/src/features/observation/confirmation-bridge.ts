@@ -44,6 +44,7 @@ export interface ConfirmationBridgeDependencies {
   readonly onError: (message: string) => void;
   readonly onStateChanged?: () => void;
   readonly onGoalConfirmed?: (goal: Goal) => void;
+  readonly onDeferredGapStartCancelled?: () => void;
 }
 
 function parsedRequest(value: unknown): GoalConfirmationRequested | undefined {
@@ -142,7 +143,7 @@ export class GoalConfirmationBridge {
       candidateSignature: request.candidateSignature,
       requestedAt: request.requestedAt,
       previousGoal,
-      reason: reason ?? (previousGoal ? "GOAL_CHANGE" : "NEW_GOAL"),
+      reason: reason ?? (this.deferredGapStart ? "GAP_START" : previousGoal ? "GOAL_CHANGE" : "NEW_GOAL"),
     };
     setPendingGoalConfirmation(pending);
 
@@ -179,7 +180,9 @@ export class GoalConfirmationBridge {
     this.snoozeTimer = setTimeout(() => {
       this.expireSnooze();
     }, this.dependencies.snoozeDurationMs);
+    const cancelledGapStart = this.deferredGapStart !== undefined;
     this.deferredGapStart = undefined;
+    if (cancelledGapStart) this.dependencies.onDeferredGapStartCancelled?.();
     this.dependencies.onStateChanged?.();
     this.clearAndDismiss();
   }
@@ -187,7 +190,9 @@ export class GoalConfirmationBridge {
   ignoreCurrent(): void {
     const signature = getPendingGoalConfirmationSnapshot().pending?.candidateSignature;
     if (signature) this.ignoredSignatures.add(signature);
+    const cancelledGapStart = this.deferredGapStart !== undefined;
     this.deferredGapStart = undefined;
+    if (cancelledGapStart) this.dependencies.onDeferredGapStartCancelled?.();
     this.dependencies.onStateChanged?.();
     this.clearAndDismiss();
   }
@@ -197,31 +202,23 @@ export class GoalConfirmationBridge {
   }
 
   async requestGapStart(start: () => Promise<void>): Promise<boolean> {
-    if (getConfirmedGoalSnapshot().confirmedGoal) {
-      await start();
-      return true;
-    }
     if (this.deferredGapStart) return false;
-    const inference = this.dependencies.controller.getSnapshot().latestInference;
-    const candidate = inference?.candidates[0];
-    if (!inference || !candidate) {
-      this.dependencies.onError("Confirm a Goal before starting Gap Mode.");
-      return false;
-    }
     let started = false;
     this.deferredGapStart = async () => {
       if (started) return;
       started = true;
       await start();
     };
-    const opened = await this.requestConfirmation({
+    const inference = this.dependencies.controller.getSnapshot().latestInference;
+    const candidate = inference?.candidates[0];
+    if (!inference || !candidate) return false;
+    await this.requestConfirmation({
       type: "GoalConfirmationRequested",
       inference,
       candidate,
       candidateSignature: candidateSignature(candidate),
       requestedAt: this.dependencies.now(),
     }, "GAP_START");
-    if (!opened) this.deferredGapStart = undefined;
     return false;
   }
 

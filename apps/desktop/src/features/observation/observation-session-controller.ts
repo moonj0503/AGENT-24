@@ -133,6 +133,20 @@ export class ObservationSessionController {
     this.dependencies.onStateChanged?.(true);
   }
 
+  beginGapObservation(): void {
+    this.pendingObservations.clear();
+    this.pendingInferenceEventIds.clear();
+    this.latestInference = undefined;
+    this.topCandidateSignature = undefined;
+    this.candidateConfidence = undefined;
+    this.consecutiveCandidateCount = 0;
+    this.lastInferenceAt = undefined;
+    this.lastPopupAt = undefined;
+    this.snoozed = false;
+    this.lastObservationSignature = undefined;
+    this.dependencies.onStateChanged?.(true);
+  }
+
   restoreRunningPreference(): void {
     if (this.status === "PAUSED") return;
     this.start();
