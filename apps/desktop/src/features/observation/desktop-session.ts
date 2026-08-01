@@ -119,6 +119,7 @@ async function initialize(options: { persistence?: ObservationPersistence; now?:
     beginGapMode: async () => {
       if (gapIntentPending) return;
       gapIntentPending = true;
+      bridge.resetSnoozeForNewGap();
       clearConfirmedGoal();
       productWorkflow.beginGapIntent();
       session.beginGapObservation();

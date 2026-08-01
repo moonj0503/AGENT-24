@@ -225,6 +225,15 @@ export class GoalConfirmationBridge {
     return true;
   }
 
+  /** A deliberate new Gap start must not inherit a previous “Later” choice. */
+  resetSnoozeForNewGap(): void {
+    this.snoozedUntil = undefined;
+    if (this.snoozeTimer !== undefined) clearTimeout(this.snoozeTimer);
+    this.snoozeTimer = undefined;
+    this.dependencies.controller.clearSnooze();
+    this.dependencies.onStateChanged?.();
+  }
+
   async requestGapStart(start: () => Promise<void>): Promise<boolean> {
     if (this.deferredGapStart) return false;
     let started = false;

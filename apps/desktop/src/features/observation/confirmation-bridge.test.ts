@@ -225,4 +225,16 @@ describe("GoalConfirmationBridge", () => {
     expect(getPendingGoalConfirmationSnapshot().pending).toBeUndefined();
     expect(bridge.cancelGapStart()).toBe(false);
   });
+
+  it("clears a previous Later snooze when the user deliberately starts a new Gap", async () => {
+    const { bridge, controller } = setup({ latestInference: inference });
+    await bridge.requestConfirmation(request);
+    bridge.later();
+    expect(controller.snooze).toHaveBeenCalledOnce();
+
+    bridge.resetSnoozeForNewGap();
+
+    expect(controller.clearSnooze).toHaveBeenCalledOnce();
+    await expect(bridge.requestConfirmation(request)).resolves.toBe(true);
+  });
 });
