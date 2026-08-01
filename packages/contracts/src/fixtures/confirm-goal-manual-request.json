@@ -1,0 +1,8 @@
+{
+  "inferenceId": "inf-001",
+  "selection": {
+    "type": "MANUAL",
+    "title": "Finish the numerical stability section",
+    "path": ["Final Project", "Report Writing", "QR Factorization"]
+  }
+}

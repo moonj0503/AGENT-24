@@ -1,0 +1,6 @@
+{
+  "code": "INVALID_STATE_TRANSITION",
+  "message": "A completed gap cannot be started again.",
+  "requestId": "req-004",
+  "retryable": false
+}

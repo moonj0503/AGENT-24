@@ -1,0 +1,5 @@
+{
+  "workSessionId": "ws-001",
+  "observationEventIds": ["evt-001", "evt-002"],
+  "previousGoalId": "goal-previous"
+}
