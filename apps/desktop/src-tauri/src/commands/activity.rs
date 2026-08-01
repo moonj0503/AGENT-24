@@ -60,7 +60,7 @@ impl ObserverState {
     pub fn new(repository: ActivityRepository) -> Self {
         Self {
             repository,
-            session: Mutex::new(ObserverSession::new(300)),
+            session: Mutex::new(ObserverSession::new(30)),
             mock_enabled: AtomicBool::new(false),
             test_snapshot: Mutex::new(None),
             user_blocked_applications: Mutex::new(Vec::new()),

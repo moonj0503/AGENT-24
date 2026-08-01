@@ -78,9 +78,11 @@ export function App() {
     setError(undefined);
     try {
       const brief = await requiredController().endGap();
-      await getDesktopObservationWorkflow()?.endGapMode();
       setScreen("recovery");
       if (isNativeOverlayAvailable()) await showRecoveryOverlay(brief);
+      void getDesktopObservationWorkflow()?.endGapMode().catch((cause) => {
+        setError(messageOf(cause, "Recovery is ready, but observation cleanup could not finish."));
+      });
     } catch (cause) { setError(messageOf(cause, "Unable to prepare recovery.")); }
   }
 

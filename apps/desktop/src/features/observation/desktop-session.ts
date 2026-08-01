@@ -9,6 +9,7 @@ import { MemoryObservationPersistence, PersistenceCoordinator, TauriObservationP
 import { invokeNative, isNativeOverlayAvailable, listenForTauriEvent, showOverlayForEvent, TAURI_EVENTS } from "../../lib/tauri";
 import { isApplicationBlocked, normalizeApplicationIdentifier } from "./queue";
 import { initializeDesktopWorkflowController } from "../workflow/controller";
+import { getDesktopWorkflowState } from "../workflow/store";
 
 function warning(message: string): void { window.dispatchEvent(new CustomEvent(OBSERVATION_WORKFLOW_ERROR_EVENT, { detail: message })); }
 function emitConfirmationRequest(event: GoalConfirmationRequested): void { window.dispatchEvent(new CustomEvent(GOAL_CONFIRMATION_REQUESTED_EVENT, { detail: event })); }
@@ -52,6 +53,24 @@ async function initialize(options: { persistence?: ObservationPersistence; now?:
   try { await syncNativePrivacy(); } catch { warning("Privacy settings could not be saved."); }
   let coordinator: PersistenceCoordinator;
   let bridge: GoalConfirmationBridge;
+  let autoEndingGap = false;
+  const autoEndGap = async (): Promise<void> => {
+    const phase = getDesktopWorkflowState().phase;
+    if (autoEndingGap || (phase !== "GAP_ACTIVE" && phase !== "AWAITING_APPROVAL")) return;
+    autoEndingGap = true;
+    try {
+      const brief = await productWorkflow.endGap();
+      session.stop();
+      window.dispatchEvent(new CustomEvent("continuity:open-main-screen", { detail: "recovery" }));
+      if (isNativeOverlayAvailable()) await showOverlayForEvent(TAURI_EVENTS.RECOVERY_READY, { brief });
+    } catch {
+      warning("The idle Gap could not be completed automatically.");
+    } finally {
+      gapIntentPending = false;
+      await coordinator?.flush().catch(() => warning("Observation data could not be saved."));
+      autoEndingGap = false;
+    }
+  };
   const session = new ObservationSessionController(state.workSessionId, {
     collectActivity: collectSanitizedActivity,
     captureScreenshot: () => captureObservationScreenshot(state.workSessionId),
@@ -64,6 +83,7 @@ async function initialize(options: { persistence?: ObservationPersistence; now?:
     isApplicationBlocked: (event) => isApplicationBlocked(event, blockedApplications),
     onStateChanged: (critical) => critical ? void coordinator?.flush().catch(() => warning("Observation data could not be saved.")) : coordinator?.schedule(),
     onWarning: warning,
+    onUserIdle: () => { void autoEndGap(); },
   }, undefined, state);
   bridge = new GoalConfirmationBridge({
     controller: session,
