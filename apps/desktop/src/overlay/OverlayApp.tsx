@@ -23,6 +23,7 @@ export function OverlayApp() {
         if (payload.pending) setPendingGoalConfirmation(payload.pending);
         openOverlay({ state: "GOAL_CONFIRMATION", inference: payload.inference });
       }),
+      listenForTauriEvent(TAURI_EVENTS.FILE_PERMISSION_REQUESTED, (payload) => { if (active) openOverlay({ state: "FILE_EDIT_PERMISSION", ...payload }); }),
       listenForTauriEvent(TAURI_EVENTS.GAP_START_CONFIRMATION, (payload) => { if (active) openOverlay({ state: "GAP_START_CONFIRMATION", ...payload }); }),
       listenForTauriEvent(TAURI_EVENTS.APPROVAL_REQUIRED, (payload) => { if (active) openOverlay({ state: "APPROVAL_REQUIRED", ...payload }); }),
       listenForTauriEvent(TAURI_EVENTS.RECOVERY_READY, (payload) => { if (active) openOverlay({ state: "RECOVERY_READY", ...payload }); }),
@@ -33,11 +34,12 @@ export function OverlayApp() {
   const inference = snapshot.inference;
   async function confirmCandidate(goal: GoalCandidate): Promise<void> {
     if (!inference) throw new Error("The Goal inference is no longer available.");
+    const continuesToGap = getPendingGoalConfirmationSnapshot().pending?.reason === "GAP_START";
     const confirmed = await confirmGoal(inference, goal.candidateId);
     setConfirmedGoal(confirmed);
     clearPendingGoalConfirmation();
     await emitTauriEvent(TAURI_EVENTS.GOAL_CONFIRMED, { goal: confirmed });
-    dismissOverlayWithAnimation();
+    if (!continuesToGap) dismissOverlayWithAnimation();
   }
   function resolve(action: "LATER" | "IGNORE" | "KEEP_CURRENT") {
     const pending = getPendingGoalConfirmationSnapshot().pending;
@@ -62,6 +64,7 @@ export function OverlayApp() {
         onKeepCurrentGoal: () => resolve("KEEP_CURRENT"),
         onConfirmGapStart: async () => { await emitTauriEvent(TAURI_EVENTS.GAP_START_CONFIRMED, undefined); dismissOverlayWithAnimation(); },
         onApproval: async (actionId, decision) => { await emitTauriEvent(TAURI_EVENTS.ACTION_APPROVAL_DECIDED, { actionId, decision }); dismissOverlayWithAnimation(); },
+        onFilePermission: async (decision) => { await emitTauriEvent(TAURI_EVENTS.FILE_PERMISSION_DECIDED, { decision }); dismissOverlayWithAnimation(); },
         onOpenMain: (screen) => { dismissOverlayWithAnimation(); void openMainWindow(screen); },
       }}
     />

@@ -6,7 +6,7 @@ import { getOverlaySnapshot } from "../../overlay/overlay-store";
 import { clearConfirmedGoal, getConfirmedGoalSnapshot, setConfirmedGoal } from "../goals/confirmed-goal-store";
 import { DEFAULT_CONFIRMATION_SNOOZE_MS, GoalConfirmationBridge } from "./confirmation-bridge";
 import { MemoryObservationPersistence, PersistenceCoordinator, TauriObservationPersistence, restoreObservationState, type ObservationPersistence, type PersistedObservationState } from "./persistence";
-import { invokeNative, isNativeOverlayAvailable } from "../../lib/tauri";
+import { invokeNative, isNativeOverlayAvailable, listenForTauriEvent, showOverlayForEvent, TAURI_EVENTS } from "../../lib/tauri";
 import { isApplicationBlocked, normalizeApplicationIdentifier } from "./queue";
 import { initializeDesktopWorkflowController } from "../workflow/controller";
 
@@ -89,6 +89,7 @@ async function initialize(options: { persistence?: ObservationPersistence; now?:
   coordinator = new PersistenceCoordinator(persistence, readState);
   const activateGap = async () => {
     try {
+      if (isNativeOverlayAvailable()) await requestFilePermission(getConfirmedGoalSnapshot().confirmedGoal?.title ?? "Confirmed Goal");
       await productWorkflow.startGap(session.getSnapshot().latestInference);
       window.dispatchEvent(new CustomEvent("continuity:open-main-screen", { detail: "gap" }));
     } catch (error) {
@@ -133,6 +134,15 @@ async function initialize(options: { persistence?: ObservationPersistence; now?:
   };
   activeWorkflow = workflow;
   return workflow;
+}
+
+async function requestFilePermission(goalTitle: string): Promise<void> {
+  let resolveDecision: () => void = () => undefined;
+  const decision = new Promise<void>((resolve) => { resolveDecision = resolve; });
+  const unsubscribe = await listenForTauriEvent(TAURI_EVENTS.FILE_PERMISSION_DECIDED, () => { unsubscribe(); resolveDecision(); });
+  try { await showOverlayForEvent(TAURI_EVENTS.FILE_PERMISSION_REQUESTED, { goalTitle }); }
+  catch (cause) { unsubscribe(); throw cause; }
+  await decision;
 }
 
 export function getDesktopObservationWorkflow(): DesktopObservationWorkflow | undefined { return activeWorkflow; }
