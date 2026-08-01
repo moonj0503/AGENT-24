@@ -130,6 +130,17 @@ describe("ObservationSessionController lifecycle and scheduling", () => {
     expect(session.captureScreenshot).toHaveBeenCalledTimes(2);
   });
 
+  it("runs an immediate observe-upload-infer cycle for every new Gap observation", async () => {
+    const session = setup({ observations: [event("event-first", "First"), event("event-second", "Second")] });
+    session.controller.beginGapObservation(); session.controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.upload).toHaveBeenCalledTimes(1); expect(session.infer).toHaveBeenCalledTimes(1);
+    session.controller.stop();
+    session.controller.beginGapObservation(); session.controller.start();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(session.upload).toHaveBeenCalledTimes(2); expect(session.infer).toHaveBeenCalledTimes(2);
+  });
+
   it("starts, stops, and does not duplicate timers on repeated start", async () => {
     const session = setup({ observations: [event("event-1", "Report")] });
     expect(session.controller.getSnapshot().status).toBe("STOPPED");
