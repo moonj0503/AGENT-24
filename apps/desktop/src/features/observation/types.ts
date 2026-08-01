@@ -1,0 +1,57 @@
+import type {
+  ActivityEvent,
+  Goal,
+  GoalCandidate,
+  GoalInferenceResult,
+  ObservationIngestionResult,
+} from "@continuity/contracts";
+
+export type ObservationSessionStatus = "STOPPED" | "RUNNING" | "PAUSED";
+export type StabilityDecision = "SHOW_CONFIRMATION" | "KEEP_OBSERVING";
+
+export interface ObservationSessionConfig {
+  readonly observationIntervalMs: number;
+  readonly uploadIntervalMs: number;
+  readonly inferenceIntervalMs: number;
+  readonly confidenceThreshold: number;
+  readonly stableInferenceCount: number;
+  readonly popupCooldownMs: number;
+}
+
+export interface ObservationSessionSnapshot {
+  readonly status: ObservationSessionStatus;
+  readonly latestInference?: GoalInferenceResult;
+  readonly candidateSignature?: string;
+  readonly candidateConfidence?: number;
+  readonly consecutiveCandidateCount: number;
+  readonly lastInferenceAt?: number;
+  readonly lastPopupAt?: number;
+  readonly snoozed: boolean;
+  readonly pendingObservationCount: number;
+  readonly pendingInferenceCount: number;
+}
+
+export interface GoalConfirmationRequested {
+  readonly type: "GoalConfirmationRequested";
+  readonly inference: GoalInferenceResult;
+  readonly candidate: GoalCandidate;
+  readonly candidateSignature: string;
+  readonly requestedAt: number;
+}
+
+export interface ObservationSessionDependencies {
+  readonly collectActivity: () => Promise<ActivityEvent | null>;
+  readonly upload: (
+    workSessionId: string,
+    events: readonly ActivityEvent[],
+  ) => Promise<ObservationIngestionResult>;
+  readonly infer: (
+    workSessionId: string,
+    observationEventIds: readonly string[],
+    previousGoalId?: string,
+  ) => Promise<GoalInferenceResult>;
+  readonly getConfirmedGoal: () => Goal | undefined;
+  readonly canRequestConfirmation: () => boolean;
+  readonly onConfirmationRequested: (event: GoalConfirmationRequested) => void;
+  readonly now: () => number;
+}
