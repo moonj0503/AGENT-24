@@ -8,6 +8,7 @@ import { DEFAULT_CONFIRMATION_SNOOZE_MS, GoalConfirmationBridge } from "./confir
 import { MemoryObservationPersistence, PersistenceCoordinator, TauriObservationPersistence, restoreObservationState, type ObservationPersistence, type PersistedObservationState } from "./persistence";
 import { invokeNative, isNativeOverlayAvailable } from "../../lib/tauri";
 import { isApplicationBlocked, normalizeApplicationIdentifier } from "./queue";
+import { initializeDesktopWorkflowController } from "../workflow/controller";
 
 function warning(message: string): void { window.dispatchEvent(new CustomEvent(OBSERVATION_WORKFLOW_ERROR_EVENT, { detail: message })); }
 function emitConfirmationRequest(event: GoalConfirmationRequested): void { window.dispatchEvent(new CustomEvent(GOAL_CONFIRMATION_REQUESTED_EVENT, { detail: event })); }
@@ -42,6 +43,7 @@ async function initialize(options: { persistence?: ObservationPersistence; now?:
   try { raw = await persistence.load(); } catch { warning("Observation data could not be restored."); }
   const state = restoreObservationState(raw, now(), options.createId);
   if (state.confirmedGoal) setConfirmedGoal(state.confirmedGoal); else clearConfirmedGoal();
+  const productWorkflow = initializeDesktopWorkflowController(state.workSessionId, state.confirmedGoal);
   let blockedApplications = [...state.privacy.blockedApplications];
   const syncNativePrivacy = async () => { if (isNativeOverlayAvailable()) await invokeNative("set_user_blocked_applications", { applications: blockedApplications }); };
   try { await syncNativePrivacy(); } catch { warning("Privacy settings could not be saved."); }
@@ -64,6 +66,7 @@ async function initialize(options: { persistence?: ObservationPersistence; now?:
     confirmGoal: (inference, candidateId) => import("../goals/api").then(({ confirmGoal }) => confirmGoal(inference, candidateId)),
     now, snoozeDurationMs: DEFAULT_CONFIRMATION_SNOOZE_MS, onError: warning,
     onStateChanged: () => void coordinator?.flush().catch(() => warning("Observation data could not be saved.")),
+    onGoalConfirmed: (goal) => productWorkflow.setConfirmedGoal(goal),
   }, state);
   const readState = (): PersistedObservationState => ({
     ...state,
@@ -80,7 +83,7 @@ async function initialize(options: { persistence?: ObservationPersistence; now?:
     resume: async () => { session.resume(); await coordinator.flush(); },
     addBlockedApplication: async (value) => { const id = normalizeApplicationIdentifier(value); if (id && !blockedApplications.includes(id)) blockedApplications = [...blockedApplications, id]; await syncNativePrivacy(); await coordinator.flush(); },
     removeBlockedApplication: async (value) => { blockedApplications = blockedApplications.filter((id) => id !== normalizeApplicationIdentifier(value)); await syncNativePrivacy(); await coordinator.flush(); },
-    clearLocalState: async (clearGoal) => { session.stop(); blockedApplications = []; if (clearGoal) clearConfirmedGoal(); await persistence.clear(); initialization = undefined; activeWorkflow = undefined; },
+    clearLocalState: async (clearGoal) => { session.stop(); blockedApplications = []; if (clearGoal) { clearConfirmedGoal(); productWorkflow.clear(); } await persistence.clear(); initialization = undefined; activeWorkflow = undefined; },
     shutdown: async () => { bridge.stop(); session.shutdown(); await coordinator.flush(); if (activeWorkflow === workflow) activeWorkflow = undefined; initialization = undefined; },
   };
   activeWorkflow = workflow;

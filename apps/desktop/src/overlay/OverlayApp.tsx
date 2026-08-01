@@ -1,6 +1,5 @@
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import { confirmGoal, selectGoal } from "../features/goals/api";
-import { createApprovalAction, createGapStartAction } from "./actions";
 import { dismissOverlayWithAnimation, openOverlay, useOverlaySnapshot } from "./overlay-store";
 import { OverlayRoot } from "./OverlayRoot";
 import { emitTauriEvent, listenForTauriEvent, openMainWindow, TAURI_EVENTS } from "../lib/tauri";
@@ -31,7 +30,6 @@ export function OverlayApp() {
     return () => { active = false; cleanups.forEach((cleanup) => cleanup()); };
   }, []);
 
-  const startGapOnce = useMemo(() => createGapStartAction(), []);
   const inference = snapshot.inference;
   async function confirmCandidate(goal: GoalCandidate): Promise<void> {
     if (!inference) throw new Error("The Goal inference is no longer available.");
@@ -62,8 +60,8 @@ export function OverlayApp() {
         onGoalLater: () => resolve("LATER"),
         onGoalIgnore: () => resolve("IGNORE"),
         onKeepCurrentGoal: () => resolve("KEEP_CURRENT"),
-        onConfirmGapStart: startGapOnce,
-        onApproval: async (actionId, status) => { if (snapshot.gap) openOverlay({ state: "APPROVAL_REQUIRED", gap: await createApprovalAction(snapshot.gap, actionId, status), actionId }); },
+        onConfirmGapStart: async () => { await emitTauriEvent(TAURI_EVENTS.GAP_START_CONFIRMED, undefined); dismissOverlayWithAnimation(); },
+        onApproval: async (actionId, decision) => { await emitTauriEvent(TAURI_EVENTS.ACTION_APPROVAL_DECIDED, { actionId, decision }); dismissOverlayWithAnimation(); },
         onOpenMain: (screen) => { dismissOverlayWithAnimation(); void openMainWindow(screen); },
       }}
     />

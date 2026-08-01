@@ -14,8 +14,8 @@ export type OverlayHandlers = {
   onGoalLater?: () => void;
   onGoalIgnore?: () => void;
   onKeepCurrentGoal?: () => void;
-  onConfirmGapStart: () => Promise<GapData>;
-  onApproval: (actionId: string, status: "COMPLETED" | "REJECTED") => Promise<void>;
+  onConfirmGapStart: () => Promise<void>;
+  onApproval: (actionId: string, decision: "APPROVE" | "REJECT") => Promise<void>;
   onOpenMain: (screen: "dashboard" | "goal" | "gap" | "recovery") => void;
 };
 

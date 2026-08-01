@@ -2,7 +2,7 @@ import type { GoalCandidate } from "@continuity/contracts";
 import type { GapData } from "../../features/gap/api";
 import { dismissOverlayWithAnimation } from "../overlay-store";
 
-export function GapStartOverlay({ goal, gap, onConfirm, onOpenDetails }: { goal?: GoalCandidate; gap?: GapData; onConfirm: () => Promise<GapData>; onOpenDetails: () => void }) {
+export function GapStartOverlay({ goal, gap, onConfirm, onOpenDetails }: { goal?: GoalCandidate; gap?: GapData; onConfirm: () => Promise<void>; onOpenDetails: () => void }) {
   return <section className="overlay-card" aria-labelledby="overlay-gap-title">
     <div className="overlay-intro">
       <p className="eyebrow">GAP START CONFIRMATION</p>
