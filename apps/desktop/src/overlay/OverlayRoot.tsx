@@ -16,6 +16,7 @@ export type OverlayHandlers = {
 export function OverlayRoot({ handlers, inference }: { handlers: OverlayHandlers; inference?: GoalInferenceResult }) {
   const snapshot = useOverlaySnapshot();
   const currentInference = snapshot.inference ?? inference;
+  if (snapshot.state === "HIDDEN") return null;
   if (snapshot.state === "GOAL_CONFIRMATION" && currentInference) return <GoalConfirmationOverlay inference={currentInference} onSelect={handlers.onGoalSelected} onOpenDetails={() => handlers.onOpenMain("goal")} />;
   if (snapshot.state === "GAP_START_CONFIRMATION") return <GapStartOverlay goal={snapshot.selectedGoal} gap={snapshot.gap} onConfirm={handlers.onConfirmGapStart} onOpenDetails={() => handlers.onOpenMain("gap")} />;
   if (snapshot.state === "APPROVAL_REQUIRED" && snapshot.gap && snapshot.actionId) return <ApprovalOverlay gap={snapshot.gap} actionId={snapshot.actionId} onDecision={handlers.onApproval} onOpenDetails={() => handlers.onOpenMain("gap")} />;

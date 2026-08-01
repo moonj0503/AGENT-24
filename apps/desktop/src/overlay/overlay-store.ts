@@ -2,6 +2,7 @@ import { useSyncExternalStore } from "react";
 import type { GoalCandidate, GoalInferenceResult, RecoveryBrief } from "@continuity/contracts";
 import type { GapData } from "../features/gap/api";
 import { chooseOverlayState, type OverlaySnapshot, type OverlayState } from "./types";
+import { emitTauriEvent, hideOverlay, TAURI_EVENTS } from "../lib/tauri";
 
 let snapshot: OverlaySnapshot = { state: null };
 const listeners = new Set<() => void>();
@@ -25,7 +26,13 @@ export function updateOverlay(next: Partial<OverlaySnapshot>) {
   emit({ ...snapshot, ...next });
 }
 
-export function dismissOverlay() { emit({ state: null }); }
+export function dismissOverlay() {
+  emit({ state: "HIDDEN" });
+  void emitTauriEvent(TAURI_EVENTS.DISMISS, undefined);
+  void hideOverlay().catch((cause) => {
+    if (import.meta.env?.DEV) console.error("Unable to hide the native Quick Overlay.", cause);
+  });
+}
 
 export function requestOverlayState(states: Array<{ state: OverlayState; payload?: Omit<OverlaySnapshot, "state"> }>) {
   const state = chooseOverlayState(states.map((item) => item.state));

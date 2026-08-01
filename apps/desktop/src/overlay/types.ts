@@ -7,6 +7,7 @@ export const OVERLAY_STATES = [
   "GAP_START_CONFIRMATION",
   "APPROVAL_REQUIRED",
   "RECOVERY_READY",
+  "HIDDEN",
 ] as const;
 
 export type OverlayState = (typeof OVERLAY_STATES)[number];

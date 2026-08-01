@@ -8,7 +8,7 @@ import { type GapData } from "./features/gap/api";
 import { GapStartOverlay } from "./overlay/components/GapStartOverlay";
 import { ApprovalOverlay } from "./overlay/components/ApprovalOverlay";
 import { dismissOverlay, setApprovalRequired, setGapStartConfirmation, useOverlaySnapshot } from "./overlay/overlay-store";
-import { emitOverlayEvent, isNativeOverlayAvailable, openMainWindow, showOverlay } from "./lib/tauri";
+import { emitOverlayEvent, isNativeOverlayAvailable, listenForTauriEvent, openMainWindow, showOverlay, showRecoveryOverlay, TAURI_EVENTS } from "./lib/tauri";
 import { OverlayRoot } from "./overlay/OverlayRoot";
 
 type Screen = "dashboard" | "goal" | "gap" | "recovery" | "permissions" | "history";
@@ -30,7 +30,13 @@ export function App() {
     void fetchPermissionRules().then(setRules).catch((cause) => setError(messageOf(cause, "Unable to load permissions.")));
     const openScreen = (event: Event) => { const next = (event as CustomEvent<Screen>).detail; if (next) setScreen(next); };
     window.addEventListener("continuity:open-main-screen", openScreen);
-    return () => window.removeEventListener("continuity:open-main-screen", openScreen);
+    let active = true;
+    let unsubscribeNative: () => void = () => undefined;
+    void listenForTauriEvent(TAURI_EVENTS.MAIN_NAVIGATE, (next) => { if (active) setScreen(next); }).then((unsubscribe) => {
+      if (active) unsubscribeNative = unsubscribe;
+      else unsubscribe();
+    });
+    return () => { active = false; unsubscribeNative(); window.removeEventListener("continuity:open-main-screen", openScreen); };
   }, []);
 
   async function loadInference() {
@@ -41,7 +47,7 @@ export function App() {
   function requestGoalConfirmation() {
     if (!inference) return;
     if (isNativeOverlayAvailable()) {
-      void emitOverlayEvent("overlay.goal-confirmation", { inference });
+      void emitOverlayEvent(TAURI_EVENTS.GOAL_CONFIRMATION, { inference });
       void showOverlay();
     } else setScreen("goal");
   }
@@ -49,7 +55,7 @@ export function App() {
   function requestGapStart() {
     setGapStartConfirmation(goal);
     if (isNativeOverlayAvailable()) {
-      void emitOverlayEvent("overlay.gap-start-confirmation", { selectedGoal: goal });
+      void emitOverlayEvent(TAURI_EVENTS.GAP_START_CONFIRMATION, { selectedGoal: goal });
       void showOverlay();
     }
   }
@@ -65,7 +71,17 @@ export function App() {
 
   async function finishGap() {
     setBusy(true); setError(undefined);
-    try { setBrief(await fetchRecoveryBrief()); setScreen("recovery"); } catch (cause) { setError(messageOf(cause, "Unable to prepare recovery.")); } finally { setBusy(false); }
+    try {
+      const nextBrief = await fetchRecoveryBrief();
+      setBrief(nextBrief); setScreen("recovery");
+      if (isNativeOverlayAvailable()) {
+        try {
+          await showRecoveryOverlay(nextBrief);
+        } catch (cause) {
+          setError(messageOf(cause, "Recovery is ready, but the native overlay is unavailable."));
+        }
+      }
+    } catch (cause) { setError(messageOf(cause, "Unable to prepare recovery.")); } finally { setBusy(false); }
   }
 
   async function decideAction(actionId: string, status: "COMPLETED" | "REJECTED") {
@@ -77,7 +93,7 @@ export function App() {
     if (!gap) return;
     setApprovalRequired(gap, actionId);
     if (isNativeOverlayAvailable()) {
-      void emitOverlayEvent("overlay.approval-required", { gap, actionId });
+      void emitOverlayEvent(TAURI_EVENTS.APPROVAL_REQUIRED, { gap, actionId });
       void showOverlay();
     }
   }

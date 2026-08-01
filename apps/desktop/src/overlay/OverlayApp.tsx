@@ -3,26 +3,20 @@ import { fetchGoalInference, selectGoal } from "../features/goals/api";
 import { createApprovalAction, createGapStartAction } from "./actions";
 import { dismissOverlay, openOverlay, useOverlaySnapshot } from "./overlay-store";
 import { OverlayRoot } from "./OverlayRoot";
-import { listenForTauriEvent, openMainWindow } from "../lib/tauri";
+import { listenForTauriEvent, openMainWindow, TAURI_EVENTS } from "../lib/tauri";
 import type { GoalCandidate } from "@continuity/contracts";
 
 export function OverlayApp() {
   const snapshot = useOverlaySnapshot();
   useEffect(() => {
     let active = true;
-    const subscriptions = [
-      ["overlay.goal-confirmation", "GOAL_CONFIRMATION"],
-      ["overlay.gap-start-confirmation", "GAP_START_CONFIRMATION"],
-      ["overlay.approval-required", "APPROVAL_REQUIRED"],
-      ["overlay.recovery-ready", "RECOVERY_READY"],
-    ] as const;
     const cleanups: Array<() => void> = [];
-    void Promise.all(subscriptions.map(async ([event, state]) => {
-      const cleanup = await listenForTauriEvent(event, (payload) => {
-        if (active && payload && typeof payload === "object") openOverlay({ state, ...(payload as object) });
-      });
-      cleanups.push(cleanup);
-    }));
+    void Promise.all([
+      listenForTauriEvent(TAURI_EVENTS.GOAL_CONFIRMATION, (payload) => { if (active) openOverlay({ state: "GOAL_CONFIRMATION", ...payload }); }),
+      listenForTauriEvent(TAURI_EVENTS.GAP_START_CONFIRMATION, (payload) => { if (active) openOverlay({ state: "GAP_START_CONFIRMATION", ...payload }); }),
+      listenForTauriEvent(TAURI_EVENTS.APPROVAL_REQUIRED, (payload) => { if (active) openOverlay({ state: "APPROVAL_REQUIRED", ...payload }); }),
+      listenForTauriEvent(TAURI_EVENTS.RECOVERY_READY, (payload) => { if (active) openOverlay({ state: "RECOVERY_READY", ...payload }); }),
+    ]).then((unsubscribes) => { if (active) cleanups.push(...unsubscribes); else unsubscribes.forEach((cleanup) => cleanup()); });
     void fetchGoalInference().then((inference) => {
       if (active && !snapshot.state) openOverlay({ state: "GOAL_CONFIRMATION", inference });
     }).catch(() => undefined);
@@ -39,7 +33,7 @@ export function OverlayApp() {
         onGoalSelected: (goal) => { if (inference) openOverlay({ state: "GAP_START_CONFIRMATION", selectedGoal: goal }); },
         onConfirmGapStart: startGapOnce,
         onApproval: async (actionId, status) => { if (snapshot.gap) openOverlay({ state: "APPROVAL_REQUIRED", gap: await createApprovalAction(snapshot.gap, actionId, status), actionId }); },
-        onOpenMain: (screen) => { void openMainWindow(screen); },
+        onOpenMain: (screen) => { dismissOverlay(); void openMainWindow(screen); },
       }}
     />
   </div>;
