@@ -95,6 +95,25 @@ function validationDetails(error: FastifyError): ApiError["details"] | undefined
   return fields.length > 0 ? { fields } : undefined;
 }
 
+function zodValidationDetails(error: FastifyError): ApiError["details"] | undefined {
+  const issues = (error as FastifyError & { issues?: unknown }).issues;
+  if (error.name !== "ZodError" || !Array.isArray(issues)) return undefined;
+  const fields = issues.flatMap((issue) => {
+    if (typeof issue !== "object" || issue === null) return [];
+    const candidate = issue as { path?: unknown; message?: unknown };
+    return [{
+      path: Array.isArray(candidate.path)
+        ? candidate.path.filter((part): part is string | number =>
+          typeof part === "string" || typeof part === "number")
+        : [],
+      message: typeof candidate.message === "string"
+        ? candidate.message
+        : "Request value is invalid.",
+    }];
+  });
+  return fields.length > 0 ? { fields } : undefined;
+}
+
 function isApiErrorCode(value: unknown): value is ApiErrorCode {
   return ApiErrorCodeSchema.safeParse(value).success;
 }
@@ -152,6 +171,12 @@ export function normalizeFastifyError(
     return buildApiError("VALIDATION_ERROR", "Request validation failed.", requestId, {
       statusCode: error.statusCode ?? 400,
       details: validationDetails(error),
+    });
+  }
+
+  if (error.name === "ZodError") {
+    return buildApiError("VALIDATION_ERROR", "Request validation failed.", requestId, {
+      details: zodValidationDetails(error),
     });
   }
 

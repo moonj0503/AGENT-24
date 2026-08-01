@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { ActivityEventSchema } from "./activity.js";
+import { ActionPlanSchema, ActionResultSchema } from "./action.js";
+import { RecoveryBriefSchema } from "./recovery.js";
 
 const IdentifierSchema = z.string().min(1);
 
@@ -84,6 +86,24 @@ export const EndGapRequestSchema = z.object({
   reason: z.string().min(1).optional(),
 });
 
+/** POST /gaps/:gapId/run (path contract) */
+export const RunGapRecoveryParamsSchema = z.object({
+  gapId: IdentifierSchema,
+});
+
+/** POST /gaps/:gapId/run */
+export const RunGapRecoveryRequestSchema = z.object({
+  goalId: IdentifierSchema,
+  checkpointId: IdentifierSchema,
+});
+
+/** Successful response for POST /gaps/:gapId/run. */
+export const RunGapRecoveryResponseSchema = z.object({
+  actionPlan: ActionPlanSchema,
+  actionResults: z.array(ActionResultSchema),
+  recoveryBrief: RecoveryBriefSchema,
+});
+
 export type ObservationRequest = z.infer<typeof ObservationRequestSchema>;
 export type ObservationIngestionResult = z.infer<typeof ObservationIngestionResultSchema>;
 export type GoalInferenceRequest = z.infer<typeof GoalInferenceRequestSchema>;
@@ -93,3 +113,6 @@ export type ActionApprovalParams = z.infer<typeof ActionApprovalParamsSchema>;
 export type ActionApprovalRequest = z.infer<typeof ActionApprovalRequestSchema>;
 export type EndGapParams = z.infer<typeof EndGapParamsSchema>;
 export type EndGapRequest = z.infer<typeof EndGapRequestSchema>;
+export type RunGapRecoveryParams = z.infer<typeof RunGapRecoveryParamsSchema>;
+export type RunGapRecoveryRequest = z.infer<typeof RunGapRecoveryRequestSchema>;
+export type RunGapRecoveryResponse = z.infer<typeof RunGapRecoveryResponseSchema>;
