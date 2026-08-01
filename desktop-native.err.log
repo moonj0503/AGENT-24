@@ -1,0 +1,3 @@
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.96s
+     Running `target\debug\continuity-desktop.exe`
+error: process didn't exit successfully: `target\debug\continuity-desktop.exe` (exit code: 0xffffffff)
