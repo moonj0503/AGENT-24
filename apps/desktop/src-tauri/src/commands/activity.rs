@@ -1,5 +1,7 @@
 use std::sync::{atomic::{AtomicBool, Ordering}, Mutex};
 
+pub const DEFAULT_IDLE_THRESHOLD_SECONDS: u64 = 30;
+
 use crate::{
     models::{ActivityEvent, RawWindowSnapshot},
     observer::{MockObservationSource, ObserverSession},
@@ -60,7 +62,7 @@ impl ObserverState {
     pub fn new(repository: ActivityRepository) -> Self {
         Self {
             repository,
-            session: Mutex::new(ObserverSession::new(300)),
+            session: Mutex::new(ObserverSession::new(DEFAULT_IDLE_THRESHOLD_SECONDS)),
             mock_enabled: AtomicBool::new(false),
             test_snapshot: Mutex::new(None),
             user_blocked_applications: Mutex::new(Vec::new()),

@@ -26,3 +26,8 @@ fn user_blocked_application_neither_returns_nor_persists_an_event() {
     assert!(state.poll().unwrap().is_none());
     assert!(state.recent(10).unwrap().is_empty());
 }
+
+#[test]
+fn default_idle_threshold_is_thirty_seconds() {
+    assert_eq!(continuity_desktop::commands::activity::DEFAULT_IDLE_THRESHOLD_SECONDS, 30);
+}
