@@ -22,6 +22,9 @@ export function evaluateStability(input: {
   readonly consecutiveCount: number;
   readonly confidenceThreshold: number;
   readonly stableInferenceCount: number;
+  readonly averageConfidence?: number;
+  readonly corroboratedConfidenceThreshold?: number;
+  readonly corroboratedInferenceCount?: number;
   readonly confirmedGoal?: Goal;
   readonly snoozed: boolean;
   readonly canRequestConfirmation: boolean;
@@ -29,8 +32,14 @@ export function evaluateStability(input: {
   readonly lastPopupAt?: number;
   readonly popupCooldownMs: number;
 }): StabilityDecision {
-  if (input.candidate.confidence < input.confidenceThreshold) return "KEEP_OBSERVING";
-  if (input.consecutiveCount < input.stableInferenceCount) return "KEEP_OBSERVING";
+  const immediateSignal = input.candidate.confidence >= input.confidenceThreshold
+    && input.consecutiveCount >= input.stableInferenceCount;
+  const corroboratedSignal = input.averageConfidence !== undefined
+    && input.corroboratedConfidenceThreshold !== undefined
+    && input.corroboratedInferenceCount !== undefined
+    && input.averageConfidence >= input.corroboratedConfidenceThreshold
+    && input.consecutiveCount >= input.corroboratedInferenceCount;
+  if (!immediateSignal && !corroboratedSignal) return "KEEP_OBSERVING";
   if (input.snoozed || !input.canRequestConfirmation) return "KEEP_OBSERVING";
   if (input.confirmedGoal && confirmedGoalSignature(input.confirmedGoal) === input.signature) {
     return "KEEP_OBSERVING";

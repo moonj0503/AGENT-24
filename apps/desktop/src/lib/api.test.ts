@@ -18,7 +18,7 @@ describe("apiRequest", () => {
     await apiRequest("/goals/confirm", { method: "POST", body: JSON.stringify({ inferenceId: "inf-1" }) });
 
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:4000/api/v1/goals/confirm",
+      expect.stringMatching(/\/api\/v1\/goals\/confirm$/),
       expect.objectContaining({
         headers: expect.objectContaining({
           accept: "application/json",

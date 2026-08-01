@@ -19,6 +19,7 @@ pub struct SanitizedSnapshot {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ApplicationCategory {
     Document,
+    Development,
     Browser,
     Communication,
     Other,
@@ -68,6 +69,7 @@ pub struct Resource {
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub enum ResourceKind {
     Document,
+    Code,
     WebPage,
     Chat,
     Other,
@@ -83,6 +85,7 @@ impl ActivityEvent {
     pub fn from_snapshot(event_type: ActivityEventType, snapshot: SanitizedSnapshot) -> Self {
         let resource_kind = match snapshot.category {
             ApplicationCategory::Document => ResourceKind::Document,
+            ApplicationCategory::Development => ResourceKind::Code,
             ApplicationCategory::Browser => ResourceKind::WebPage,
             ApplicationCategory::Communication => ResourceKind::Chat,
             ApplicationCategory::Other => ResourceKind::Other,

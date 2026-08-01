@@ -11,6 +11,9 @@ describe("observation persistence", () => {
     expect(migratePersistedObservationState({ ...valid, version: 2 })).toBeUndefined();
     expect(migratePersistedObservationState({ ...valid, rawWindowTitle: "secret" })).toBeUndefined();
     expect(migratePersistedObservationState({ ...valid, confirmedGoal: { nope: true } })?.confirmedGoal).toBeUndefined();
+    const legacy = { ...valid } as Record<string, unknown>;
+    delete legacy.candidateConfidenceSamples;
+    expect(migratePersistedObservationState(legacy)?.candidateConfidenceSamples).toEqual([]);
   });
 
   it("restores a session once and rotates expired or malformed IDs", () => {

@@ -1,4 +1,4 @@
-import { GOAL_CONFIRMATION_REQUESTED_EVENT, OBSERVATION_WORKFLOW_ERROR_EVENT, type GoalConfirmationRequested } from "./types";
+import { GOAL_CONFIRMATION_REQUESTED_EVENT, GOAL_INFERENCE_UPDATED_EVENT, INTERRUPTION_RESUMED_EVENT, OBSERVATION_WORKFLOW_ERROR_EVENT, type GoalConfirmationRequested, type GoalInferenceUpdated, type InterruptionResumed } from "./types";
 import { requestGoalInference, uploadObservations } from "./api";
 import { captureObservationScreenshot, collectSanitizedActivity } from "./native";
 import { ObservationSessionController } from "./observation-session-controller";
@@ -12,6 +12,8 @@ import { initializeDesktopWorkflowController } from "../workflow/controller";
 
 function warning(message: string): void { window.dispatchEvent(new CustomEvent(OBSERVATION_WORKFLOW_ERROR_EVENT, { detail: message })); }
 function emitConfirmationRequest(event: GoalConfirmationRequested): void { window.dispatchEvent(new CustomEvent(GOAL_CONFIRMATION_REQUESTED_EVENT, { detail: event })); }
+function emitInferenceUpdate(event: GoalInferenceUpdated): void { window.dispatchEvent(new CustomEvent(GOAL_INFERENCE_UPDATED_EVENT, { detail: event })); }
+function emitInterruptionResumed(event: InterruptionResumed): void { window.dispatchEvent(new CustomEvent(INTERRUPTION_RESUMED_EVENT, { detail: event })); }
 
 export interface DesktopObservationWorkflow {
   readonly session: ObservationSessionController;
@@ -60,6 +62,8 @@ async function initialize(options: { persistence?: ObservationPersistence; now?:
     getConfirmedGoal: () => getConfirmedGoalSnapshot().confirmedGoal,
     canRequestConfirmation: () => { const overlay = getOverlaySnapshot().state; return overlay === null || overlay === "HIDDEN"; },
     onConfirmationRequested: emitConfirmationRequest,
+    onInferenceUpdated: emitInferenceUpdate,
+    onInterruptionResumed: emitInterruptionResumed,
     now,
     isApplicationBlocked: (event) => isApplicationBlocked(event, blockedApplications),
     onStateChanged: (critical) => critical ? void coordinator?.flush().catch(() => warning("Observation data could not be saved.")) : coordinator?.schedule(),

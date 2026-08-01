@@ -16,6 +16,7 @@ export const PersistedObservationStateSchema = z.object({
   latestInference: GoalInferenceResultSchema.optional(),
   candidateSignature: z.string().optional(),
   consecutiveCandidateCount: z.number().int().nonnegative(),
+  candidateConfidenceSamples: z.array(z.number().min(0).max(1)).max(3).default([]),
   lastInferenceAt: z.number().optional(),
   lastPopupAt: z.number().optional(),
   snoozedUntil: z.number().optional(),
@@ -72,7 +73,7 @@ export function createDefaultObservationState(now: number, id: string = crypto.r
   return {
     version: 1, workSessionId: id, workSessionCreatedAt: now, observationStatus: "RUNNING", gapIntentPending: false,
     pendingObservations: [], uploadedObservationEventIds: [], pendingInferenceEventIds: [],
-    consecutiveCandidateCount: 0, ignoredCandidates: [], privacy: { blockedApplications: [] },
+    consecutiveCandidateCount: 0, candidateConfidenceSamples: [], ignoredCandidates: [], privacy: { blockedApplications: [] },
   };
 }
 

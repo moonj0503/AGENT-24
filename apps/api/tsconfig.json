@@ -1,1 +1,5 @@
-{ "extends": "../../tsconfig.base.json", "include": ["src", "tests"] }
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": { "rootDir": "." },
+  "include": ["src", "tests"]
+}

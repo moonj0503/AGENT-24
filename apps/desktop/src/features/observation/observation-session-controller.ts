@@ -18,6 +18,9 @@ export const DEFAULT_OBSERVATION_SESSION_CONFIG: ObservationSessionConfig = Obje
   inferenceIntervalMs: 20_000,
   confidenceThreshold: 0.8,
   stableInferenceCount: 1,
+  inferenceContextEventLimit: 12,
+  corroboratedConfidenceThreshold: 0.72,
+  corroboratedInferenceCount: 2,
   popupCooldownMs: 15 * 60_000,
 });
 
@@ -47,6 +50,8 @@ export class ObservationSessionController {
   private latestInference?: GoalInferenceResult;
   private topCandidateSignature?: string;
   private candidateConfidence?: number;
+  private candidateConfidenceSamples: number[] = [];
+  private observedIdleAt?: number;
   private consecutiveCandidateCount = 0;
   private lastInferenceAt?: number;
   private lastPopupAt?: number;
@@ -69,9 +74,16 @@ export class ObservationSessionController {
       if (restoredQueue.trimmed) dependencies.onWarning?.("The local observation queue reached its limit.");
       for (const id of initial.pendingInferenceEventIds) this.pendingInferenceEventIds.add(id);
       for (const id of initial.uploadedObservationEventIds) this.uploadedObservationEventIds.add(id);
+      this.trimUploadedObservationIds();
       this.latestInference = initial.latestInference;
       this.topCandidateSignature = initial.candidateSignature;
-      this.consecutiveCandidateCount = initial.consecutiveCandidateCount;
+      this.candidateConfidenceSamples = initial.candidateConfidenceSamples
+        .slice(-this.config.corroboratedInferenceCount);
+      // Older persisted states have no confidence samples. Restart fresh rather
+      // than treating an unverifiable previous candidate as corroborated.
+      this.consecutiveCandidateCount = this.candidateConfidenceSamples.length > 0
+        ? initial.consecutiveCandidateCount
+        : 0;
       this.lastInferenceAt = initial.lastInferenceAt;
       this.lastPopupAt = initial.lastPopupAt;
       this.snoozed = initial.snoozedUntil !== undefined && initial.snoozedUntil > dependencies.now();
@@ -119,6 +131,8 @@ export class ObservationSessionController {
     this.latestInference = undefined;
     this.topCandidateSignature = undefined;
     this.candidateConfidence = undefined;
+    this.candidateConfidenceSamples = [];
+    this.observedIdleAt = undefined;
     this.consecutiveCandidateCount = 0;
     this.lastInferenceAt = undefined;
     this.lastPopupAt = undefined;
@@ -139,9 +153,12 @@ export class ObservationSessionController {
   beginGapObservation(): void {
     this.pendingObservations.clear();
     this.pendingInferenceEventIds.clear();
+    this.uploadedObservationEventIds.clear();
     this.latestInference = undefined;
     this.topCandidateSignature = undefined;
     this.candidateConfidence = undefined;
+    this.candidateConfidenceSamples = [];
+    this.observedIdleAt = undefined;
     this.consecutiveCandidateCount = 0;
     this.lastInferenceAt = undefined;
     this.lastPopupAt = undefined;
@@ -156,7 +173,7 @@ export class ObservationSessionController {
     this.start();
   }
 
-  getPersistentFields(): Pick<PersistedObservationState, "observationStatus" | "pendingObservations" | "uploadedObservationEventIds" | "pendingInferenceEventIds" | "latestInference" | "candidateSignature" | "consecutiveCandidateCount" | "lastInferenceAt" | "lastPopupAt"> {
+  getPersistentFields(): Pick<PersistedObservationState, "observationStatus" | "pendingObservations" | "uploadedObservationEventIds" | "pendingInferenceEventIds" | "latestInference" | "candidateSignature" | "consecutiveCandidateCount" | "candidateConfidenceSamples" | "lastInferenceAt" | "lastPopupAt"> {
     return {
       observationStatus: this.status === "PAUSED" ? "PAUSED" : "RUNNING",
       pendingObservations: [...this.pendingObservations.values()],
@@ -165,6 +182,7 @@ export class ObservationSessionController {
       latestInference: this.latestInference,
       candidateSignature: this.topCandidateSignature,
       consecutiveCandidateCount: this.consecutiveCandidateCount,
+      candidateConfidenceSamples: this.candidateConfidenceSamples,
       lastInferenceAt: this.lastInferenceAt,
       lastPopupAt: this.lastPopupAt,
     };
@@ -235,6 +253,7 @@ export class ObservationSessionController {
       const event = await this.dependencies.collectActivity();
       if (!event || !this.isCurrent(generation)) return;
       if (this.dependencies.isApplicationBlocked?.(event)) return;
+      this.observeInterruptionTransition(event);
       const signature = observationSignature(event);
       if (this.uploadedObservationEventIds.has(event.eventId)) return;
       if (signature === this.lastObservationSignature) return;
@@ -270,6 +289,7 @@ export class ObservationSessionController {
         this.pendingInferenceEventIds.add(eventId);
         this.uploadedObservationEventIds.add(eventId);
       }
+      this.trimUploadedObservationIds();
       this.uploadBackoff.reset();
       this.uploadRetryAt = 0;
       this.dependencies.onStateChanged?.(true);
@@ -292,7 +312,8 @@ export class ObservationSessionController {
     }
     this.inferring = true;
     const generation = this.generation;
-    const eventIds = [...this.pendingInferenceEventIds];
+    const pendingEventIds = [...this.pendingInferenceEventIds];
+    const eventIds = this.inferenceContextEventIds();
     const confirmedGoal = this.dependencies.getConfirmedGoal();
     try {
       const inference = await this.dependencies.infer(
@@ -301,7 +322,7 @@ export class ObservationSessionController {
         confirmedGoal?.goalId,
       );
       if (!this.isCurrent(generation)) return;
-      for (const eventId of eventIds) this.pendingInferenceEventIds.delete(eventId);
+      for (const eventId of pendingEventIds) this.pendingInferenceEventIds.delete(eventId);
       this.applyInference(inference, this.dependencies.getConfirmedGoal());
       this.inferenceBackoff.reset();
       this.inferenceRetryAt = 0;
@@ -321,13 +342,26 @@ export class ObservationSessionController {
     const candidate = inference.candidates[0];
     if (!candidate) return;
     const signature = candidateSignature(candidate);
-    this.consecutiveCandidateCount = signature === this.topCandidateSignature
+    const sameCandidate = signature === this.topCandidateSignature;
+    this.consecutiveCandidateCount = sameCandidate
       ? this.consecutiveCandidateCount + 1
       : 1;
+    this.candidateConfidenceSamples = sameCandidate
+      ? [...this.candidateConfidenceSamples, candidate.confidence].slice(-this.config.corroboratedInferenceCount)
+      : [candidate.confidence];
+    const averageConfidence = this.candidateConfidenceSamples
+      .reduce((total, confidence) => total + confidence, 0) / this.candidateConfidenceSamples.length;
     this.latestInference = inference;
     this.topCandidateSignature = signature;
     this.candidateConfidence = candidate.confidence;
     this.lastInferenceAt = this.dependencies.now();
+    this.dependencies.onInferenceUpdated?.({
+      inference,
+      candidate,
+      candidateSignature: signature,
+      observedAt: this.lastInferenceAt,
+      averageConfidence,
+    });
     this.dependencies.onStateChanged?.(false);
 
     if (evaluateStability({
@@ -336,6 +370,9 @@ export class ObservationSessionController {
       consecutiveCount: this.consecutiveCandidateCount,
       confidenceThreshold: this.config.confidenceThreshold,
       stableInferenceCount: this.config.stableInferenceCount,
+      averageConfidence,
+      corroboratedConfidenceThreshold: this.config.corroboratedConfidenceThreshold,
+      corroboratedInferenceCount: this.config.corroboratedInferenceCount,
       confirmedGoal,
       snoozed: this.snoozed,
       canRequestConfirmation: this.dependencies.canRequestConfirmation(),
@@ -357,5 +394,38 @@ export class ObservationSessionController {
 
   private isCurrent(generation: number): boolean {
     return this.status === "RUNNING" && generation === this.generation;
+  }
+
+  /**
+   * Reuses a short, bounded history of observations that were already sanitized
+   * and uploaded. This supplies sequence context without collecting new data.
+   */
+  private inferenceContextEventIds(): string[] {
+    const ids = [...this.uploadedObservationEventIds, ...this.pendingInferenceEventIds];
+    return [...new Set(ids)].slice(-this.config.inferenceContextEventLimit);
+  }
+
+  /** Keeps the in-memory history within the same bound used for persisted IDs. */
+  private trimUploadedObservationIds(): void {
+    while (this.uploadedObservationEventIds.size > this.queueLimits.maximumEvents) {
+      const oldest = this.uploadedObservationEventIds.values().next().value;
+      if (oldest === undefined) return;
+      this.uploadedObservationEventIds.delete(oldest);
+    }
+  }
+
+  private observeInterruptionTransition(event: ActivityEvent): void {
+    if (event.type === "USER_IDLE") {
+      this.observedIdleAt = this.dependencies.now();
+      return;
+    }
+    if (event.type !== "USER_ACTIVITY" || this.observedIdleAt === undefined) return;
+    const resumedAt = this.dependencies.now();
+    this.dependencies.onInterruptionResumed?.({
+      observedIdleAt: this.observedIdleAt,
+      resumedAt,
+      durationMs: Math.max(0, resumedAt - this.observedIdleAt),
+    });
+    this.observedIdleAt = undefined;
   }
 }

@@ -7,6 +7,8 @@ import {
 } from "@continuity/contracts";
 import { DEFAULT_OBSERVATION_SESSION_CONFIG, ObservationSessionController } from "./observation-session-controller";
 import { candidateSignature, evaluateStability } from "./stability";
+import { createDefaultObservationState, type PersistedObservationState } from "./persistence";
+import type { QueueLimits } from "./queue";
 import type {
   GoalConfirmationRequested,
   ObservationSessionConfig,
@@ -20,13 +22,16 @@ const config: ObservationSessionConfig = {
   inferenceIntervalMs: 50,
   confidenceThreshold: 0.8,
   stableInferenceCount: 2,
+  inferenceContextEventLimit: 12,
+  corroboratedConfidenceThreshold: 0.72,
+  corroboratedInferenceCount: 2,
   popupCooldownMs: 100,
 };
 
-function event(eventId: string, title: string): ActivityEvent {
+function event(eventId: string, title: string, type: ActivityEvent["type"] = "ACTIVE_WINDOW_CHANGED"): ActivityEvent {
   return {
     eventId,
-    type: "ACTIVE_WINDOW_CHANGED",
+    type,
     occurredAt: "2026-08-01T09:00:00.000Z",
     application: { name: "Writer", category: "DOCUMENT" },
     resource: { title, kind: "DOCUMENT" },
@@ -55,6 +60,8 @@ function setup(options: {
   inferences?: Array<GoalInferenceResult | Error>;
   confirmedGoal?: ReturnType<typeof GoalSchema.parse>;
   now?: () => number;
+  initial?: PersistedObservationState;
+  queueLimits?: QueueLimits;
 } = {}) {
   const observations = [...(options.observations ?? [])];
   const inferences = [...(options.inferences ?? [inference()])];
@@ -77,6 +84,7 @@ function setup(options: {
     return next;
   });
   const confirmations: GoalConfirmationRequested[] = [];
+  const interruptions: Array<{ durationMs: number }> = [];
   const warnings: string[] = [];
   const captureScreenshot = vi.fn(async () => undefined);
   const dependencies: ObservationSessionDependencies = {
@@ -87,16 +95,18 @@ function setup(options: {
     getConfirmedGoal: () => options.confirmedGoal,
     canRequestConfirmation: () => true,
     onConfirmationRequested: (requested) => confirmations.push(requested),
+    onInterruptionResumed: (event) => interruptions.push(event),
     onWarning: (message) => warnings.push(message),
     now: options.now ?? (() => Date.now()),
   };
   return {
-    controller: new ObservationSessionController("work-session", dependencies, config),
+    controller: new ObservationSessionController("work-session", dependencies, config, options.initial, options.queueLimits),
     collectActivity,
     captureScreenshot,
     upload,
     infer,
     confirmations,
+    interruptions,
     warnings,
   };
 }
@@ -116,6 +126,7 @@ describe("ObservationSessionController lifecycle and scheduling", () => {
     expect(DEFAULT_OBSERVATION_SESSION_CONFIG.inferenceIntervalMs).toBe(20_000);
     expect(DEFAULT_OBSERVATION_SESSION_CONFIG.screenshotIntervalMs).toBe(20_000);
     expect(DEFAULT_OBSERVATION_SESSION_CONFIG.stableInferenceCount).toBe(1);
+    expect(DEFAULT_OBSERVATION_SESSION_CONFIG.inferenceContextEventLimit).toBe(12);
   });
 
   it("captures at Gap observation start and then every configured screenshot interval", async () => {
@@ -195,6 +206,44 @@ describe("ObservationSessionController lifecycle and scheduling", () => {
     expect(session.upload).toHaveBeenCalledOnce();
     expect(session.infer).toHaveBeenCalledOnce();
     session.controller.stop();
+  });
+
+  it("includes a bounded history of already-sanitized observations in later inference", async () => {
+    const first = event("event-1", "Report");
+    const second = event("event-2", "References");
+    const session = setup({ observations: [first, null, null, second, null, null] });
+    session.controller.start();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(session.infer.mock.calls[1]?.[1]).toEqual([first.eventId, second.eventId]);
+    session.controller.stop();
+  });
+
+  it("reports a return after a previously observed idle transition without collecting extra data", async () => {
+    let now = 0;
+    const session = setup({
+      now: () => now,
+      observations: [event("idle", "Report", "USER_IDLE"), event("active", "Report", "USER_ACTIVITY")],
+    });
+    session.controller.start();
+    await vi.advanceTimersByTimeAsync(10);
+    now = 45_000;
+    await vi.advanceTimersByTimeAsync(10);
+    expect(session.interruptions).toMatchObject([{ observedIdleAt: 0, resumedAt: 45_000, durationMs: 45_000 }]);
+    session.controller.stop();
+  });
+
+  it("bounds retained uploaded IDs in memory and clears them for a new Gap", () => {
+    const initial = {
+      ...createDefaultObservationState(0, "00000000-0000-4000-8000-000000000001"),
+      uploadedObservationEventIds: ["first", "second", "third"],
+    };
+    const session = setup({
+      initial,
+      queueLimits: { maximumEvents: 2, maximumAgeMs: 60_000 },
+    });
+    expect(session.controller.getPersistentFields().uploadedObservationEventIds).toEqual(["second", "third"]);
+    session.controller.beginGapObservation();
+    expect(session.controller.getPersistentFields().uploadedObservationEventIds).toEqual([]);
   });
 
   it("retries observation and upload failures without losing pending activity", async () => {
@@ -285,6 +334,29 @@ describe("candidate stability and confirmation requests", () => {
       consecutiveCandidateCount: 2,
       lastPopupAt: 100,
     });
+    session.controller.stop();
+  });
+
+  it("offers a repeated moderately-confident candidate after corroboration", async () => {
+    const lowButRepeated = inference("first", 0.75);
+    const session = setup({
+      observations: [event("event-1", "Report"), null, null, null, null, event("event-2", "Notes")],
+      inferences: [lowButRepeated, inference("second", 0.75)],
+    });
+    session.controller.start();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(session.confirmations).toHaveLength(1);
+    session.controller.stop();
+  });
+
+  it("persists confidence samples used for corroborated confirmation", async () => {
+    const session = setup({
+      observations: [event("event-1", "Report")],
+      inferences: [inference("first", 0.75)],
+    });
+    session.controller.start();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(session.controller.getPersistentFields().candidateConfidenceSamples).toEqual([0.75]);
     session.controller.stop();
   });
 

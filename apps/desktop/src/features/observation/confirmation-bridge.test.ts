@@ -173,6 +173,12 @@ describe("GoalConfirmationBridge", () => {
     expect(start).toHaveBeenCalledOnce();
   });
 
+  it("opens an explicit review for the latest observed candidate", async () => {
+    const { bridge } = setup({ latestInference: inference });
+    await expect(bridge.requestLatestCandidate()).resolves.toBe(true);
+    expect(getPendingGoalConfirmationSnapshot().pending?.inference).toEqual(inference);
+  });
+
   it("requires fresh confirmation even when a previous Goal exists and does not start after failed confirmation", async () => {
     const previous = setup({ latestInference: inference });
     const start = vi.fn(async () => undefined);

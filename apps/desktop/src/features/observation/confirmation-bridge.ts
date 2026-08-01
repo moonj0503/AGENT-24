@@ -173,6 +173,20 @@ export class GoalConfirmationBridge {
     return this.confirmation;
   }
 
+  /** Lets the user explicitly review a currently observed, low-confidence candidate. */
+  async requestLatestCandidate(): Promise<boolean> {
+    const inference = this.dependencies.controller.getSnapshot().latestInference;
+    const candidate = inference?.candidates[0];
+    if (!inference || !candidate) return false;
+    return this.requestConfirmation({
+      type: "GoalConfirmationRequested",
+      inference,
+      candidate,
+      candidateSignature: candidateSignature(candidate),
+      requestedAt: this.dependencies.now(),
+    });
+  }
+
   later(): void {
     this.snoozedUntil = this.dependencies.now() + this.dependencies.snoozeDurationMs;
     this.dependencies.controller.snooze();

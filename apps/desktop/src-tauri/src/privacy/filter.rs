@@ -26,6 +26,14 @@ pub fn classify_application(application_name: &str) -> ApplicationCategory {
     .any(|marker| name.contains(marker))
     {
         ApplicationCategory::Document
+    } else if [
+        "code", "vscode", "devenv", "idea", "pycharm", "webstorm", "rider",
+        "android studio", "sublime_text", "notepad++",
+    ]
+    .iter()
+    .any(|marker| name.contains(marker))
+    {
+        ApplicationCategory::Development
     } else if ["chrome", "firefox", "edge", "browser", "brave", "safari"]
         .iter()
         .any(|marker| name.contains(marker))
