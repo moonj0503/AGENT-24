@@ -1,3 +1,0 @@
-import { failed, readString, type ContinuityTool } from "./tool-result.js";
-
-export const organizeReferencesTool: ContinuityTool = { name: "ORGANIZE_REFERENCES", async execute(input) { try { const actionId = readString(input, "actionId"); const references = input.references; if (!Array.isArray(references) || !references.every((item) => typeof item === "string")) throw new Error("references must be an array of strings."); return { status: "SUCCESS", effect: { type: "VIRTUAL_REFERENCE_COLLECTION_CREATED", resourceId: `references-${actionId}` }, reversible: true, rollbackToken: `references-${actionId}`, summary: "Created a virtual reference collection without moving originals.", value: { references } }; } catch (error) { return failed(error); } } };

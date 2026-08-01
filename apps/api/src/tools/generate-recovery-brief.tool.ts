@@ -1,6 +1,0 @@
-import { RecoveryBriefSchema } from "@continuity/contracts";
-import { failed, readString, type ContinuityTool } from "./tool-result.js";
-
-function stringArray(input: Readonly<Record<string, unknown>>, key: string): string[] { const value = input[key]; if (!Array.isArray(value) || !value.every((item) => typeof item === "string")) throw new Error(`${key} must be an array of strings.`); return value; }
-
-export const generateRecoveryBriefTool: ContinuityTool = { name: "GENERATE_RECOVERY_BRIEF", async execute(input, context) { try { const gapId = readString(input, "gapId"); const value = RecoveryBriefSchema.parse({ briefId: `brief-${gapId}`, gapId, goalBeforeGap: readString(input, "goalBeforeGap"), completedActions: stringArray(input, "completedActions"), pendingActions: stringArray(input, "pendingActions"), externalEffects: stringArray(input, "externalEffects"), recommendedNextAction: { title: readString(input, "recommendedNextAction"), estimatedMinutes: typeof input.estimatedMinutes === "number" ? input.estimatedMinutes : 10 }, createdAt: (context?.now?.() ?? new Date()).toISOString() }); return { status: "SUCCESS", effect: { type: "RECOVERY_BRIEF_CREATED", resourceId: value.briefId }, reversible: true, rollbackToken: value.briefId, summary: "Generated a recovery brief.", value }; } catch (error) { return failed(error); } } };
