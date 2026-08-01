@@ -61,5 +61,6 @@ export interface ObservationSessionDependencies {
   readonly onStateChanged?: (critical: boolean) => void;
   readonly onWarning?: (message: string) => void;
   readonly onUserIdle?: () => void;
+  readonly onUserActivity?: () => void;
   readonly isApplicationBlocked?: (event: ActivityEvent) => boolean;
 }

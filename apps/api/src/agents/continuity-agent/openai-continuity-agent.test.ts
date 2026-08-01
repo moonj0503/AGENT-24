@@ -193,6 +193,60 @@ describe("OpenAIContinuityAgent", () => {
     ).rejects.toThrow("unique actionId");
   });
 
+  it("requires one valid approved-file edit and retries one invalid proposal", async () => {
+    const approvedInput: ContinuityContext = {
+      ...input,
+      approvedTextFile: {
+        authorizationId: "authorization-001",
+        fileName: "notes.txt",
+        content: "Unique unfinished note",
+      },
+    };
+    const validEditPlan: ActionPlan = {
+      ...validPlan(),
+      actions: [{
+        actionId: "action-edit",
+        type: "EDIT_APPROVED_TEXT_FILE",
+        title: "Finish the approved note",
+        reason: "Advance the confirmed Goal in the user-approved file.",
+        riskLevel: "MEDIUM",
+        reversible: true,
+        status: "POLICY_CHECKING",
+        textEdit: {
+          authorizationId: "authorization-001",
+          find: "Unique unfinished note",
+          replace: "Completed note",
+        },
+      }],
+    };
+    const planningModel: ContinuityPlanningModel & { generate: ReturnType<typeof vi.fn> } = {
+      generate: vi.fn()
+        .mockResolvedValueOnce(validPlan())
+        .mockResolvedValueOnce(validEditPlan),
+    };
+
+    await expect(new OpenAIContinuityAgent(unusedClient, "model", planningModel).run(approvedInput))
+      .resolves.toEqual(validEditPlan);
+    expect(planningModel.generate).toHaveBeenCalledTimes(2);
+    expect(planningModel.generate.mock.calls[1]?.[0].instructions).toContain("Retry the plan");
+  });
+
+  it("fails closed after two invalid approved-file proposals", async () => {
+    const approvedInput: ContinuityContext = {
+      ...input,
+      approvedTextFile: {
+        authorizationId: "authorization-001",
+        fileName: "notes.txt",
+        content: "Unique unfinished note",
+      },
+    };
+    const planningModel = mockModel(validPlan());
+
+    await expect(new OpenAIContinuityAgent(unusedClient, "model", planningModel).run(approvedInput))
+      .rejects.toThrow("exactly one edit");
+    expect(planningModel.generate).toHaveBeenCalledTimes(2);
+  });
+
   it.each(["WAITING_APPROVAL", "EXECUTING", "COMPLETED", "FAILED", "REJECTED", "ROLLED_BACK"])(
     "rejects execution-implying status %s",
     async (status) => {

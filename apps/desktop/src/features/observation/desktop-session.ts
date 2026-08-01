@@ -54,23 +54,38 @@ async function initialize(options: { persistence?: ObservationPersistence; now?:
   let coordinator: PersistenceCoordinator;
   let bridge: GoalConfirmationBridge;
   let autoEndingGap = false;
+  let userReturnedWhileEnding = false;
+  let pendingIdleRecovery: import("@continuity/contracts").RecoveryBrief | undefined;
   const autoEndGap = async (): Promise<void> => {
     const phase = getDesktopWorkflowState().phase;
     if (autoEndingGap || (phase !== "GAP_ACTIVE" && phase !== "AWAITING_APPROVAL")) return;
     autoEndingGap = true;
     try {
-      const brief = await productWorkflow.endGap();
-      session.stop();
-      window.dispatchEvent(new CustomEvent("continuity:open-main-screen", { detail: "recovery" }));
-      if (isNativeOverlayAvailable()) await showOverlayForEvent(TAURI_EVENTS.RECOVERY_READY, { brief });
+      pendingIdleRecovery = await productWorkflow.endGap();
+      if (userReturnedWhileEnding) void revealIdleRecovery();
     } catch {
       warning("The idle Gap could not be completed automatically.");
     } finally {
       gapIntentPending = false;
       await coordinator?.flush().catch(() => warning("Observation data could not be saved."));
       autoEndingGap = false;
+      userReturnedWhileEnding = false;
     }
   };
+  async function revealIdleRecovery(): Promise<void> {
+    const brief = pendingIdleRecovery;
+    if (!brief) return;
+    pendingIdleRecovery = undefined;
+    try {
+      window.dispatchEvent(new CustomEvent("continuity:open-main-screen", { detail: "recovery" }));
+      if (isNativeOverlayAvailable()) await showOverlayForEvent(TAURI_EVENTS.RECOVERY_READY, { brief });
+    } catch {
+      warning("Recovery is ready, but its notification could not be shown.");
+    } finally {
+      session.stop();
+      await coordinator?.flush().catch(() => warning("Observation data could not be saved."));
+    }
+  }
   const session = new ObservationSessionController(state.workSessionId, {
     collectActivity: collectSanitizedActivity,
     captureScreenshot: () => captureObservationScreenshot(state.workSessionId),
@@ -84,6 +99,10 @@ async function initialize(options: { persistence?: ObservationPersistence; now?:
     onStateChanged: (critical) => critical ? void coordinator?.flush().catch(() => warning("Observation data could not be saved.")) : coordinator?.schedule(),
     onWarning: warning,
     onUserIdle: () => { void autoEndGap(); },
+    onUserActivity: () => {
+      if (autoEndingGap) userReturnedWhileEnding = true;
+      else void revealIdleRecovery();
+    },
   }, undefined, state);
   bridge = new GoalConfirmationBridge({
     controller: session,

@@ -256,6 +256,7 @@ export class ObservationSessionController {
       if (!event || !this.isCurrent(generation)) return;
       if (this.dependencies.isApplicationBlocked?.(event)) return;
       if (event.type === "USER_IDLE") this.dependencies.onUserIdle?.();
+      if (event.type === "USER_ACTIVITY") this.dependencies.onUserActivity?.();
       const signature = observationSignature(event);
       if (this.uploadedObservationEventIds.has(event.eventId)) return;
       if (signature === this.lastObservationSignature) return;

@@ -56,6 +56,7 @@ function setup(options: {
   confirmedGoal?: ReturnType<typeof GoalSchema.parse>;
   now?: () => number;
   onUserIdle?: () => void;
+  onUserActivity?: () => void;
 } = {}) {
   const observations = [...(options.observations ?? [])];
   const inferences = [...(options.inferences ?? [inference()])];
@@ -90,6 +91,7 @@ function setup(options: {
     onConfirmationRequested: (requested) => confirmations.push(requested),
     onWarning: (message) => warnings.push(message),
     onUserIdle: options.onUserIdle,
+    onUserActivity: options.onUserActivity,
     now: options.now ?? (() => Date.now()),
   };
   return {
@@ -175,6 +177,21 @@ describe("ObservationSessionController lifecycle and scheduling", () => {
     await vi.advanceTimersByTimeAsync(10);
 
     expect(onUserIdle).toHaveBeenCalledOnce();
+  });
+
+  it("reports resumed user activity to the workflow lifecycle", async () => {
+    const onUserActivity = vi.fn();
+    const activityEvent: ActivityEvent = {
+      ...event("event-active", "Report"),
+      type: "USER_ACTIVITY",
+      metadata: { idleSeconds: 0 },
+    };
+    const session = setup({ observations: [activityEvent], onUserActivity });
+    session.controller.start();
+
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(onUserActivity).toHaveBeenCalledOnce();
   });
 
   it("pauses every cycle and resumes scheduling", async () => {
