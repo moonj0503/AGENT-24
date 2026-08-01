@@ -16,7 +16,7 @@ export const DEFAULT_OBSERVATION_SESSION_CONFIG: ObservationSessionConfig = Obje
   uploadIntervalMs: 30_000,
   inferenceIntervalMs: 20_000,
   confidenceThreshold: 0.8,
-  stableInferenceCount: 2,
+  stableInferenceCount: 1,
   popupCooldownMs: 15 * 60_000,
 });
 

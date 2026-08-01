@@ -108,8 +108,9 @@ afterEach(() => {
 });
 
 describe("ObservationSessionController lifecycle and scheduling", () => {
-  it("checks goal inference every twenty seconds by default", () => {
+  it("checks every twenty seconds and accepts one high-confidence result by default", () => {
     expect(DEFAULT_OBSERVATION_SESSION_CONFIG.inferenceIntervalMs).toBe(20_000);
+    expect(DEFAULT_OBSERVATION_SESSION_CONFIG.stableInferenceCount).toBe(1);
   });
 
   it("starts, stops, and does not duplicate timers on repeated start", async () => {

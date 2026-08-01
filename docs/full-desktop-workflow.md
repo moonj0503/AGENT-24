@@ -6,7 +6,7 @@ The production desktop composes the existing components in this order:
 
 The initial desktop action creates only a local pending Gap intent. Observation for Goal identification starts at that point, clears stale queued inference for the intent, and continues until the Gap ends. No backend GapSession and no continuity action exist before explicit Goal confirmation. Cancelling confirmation stops the pending observation. This preserves the existing backend lifecycle and contracts while making Gap Mode the user-facing entry point.
 
-Goal identification runs every twenty seconds and still requires two stable matching inference results before prompting the user. With consistent activity, confirmation is normally available after roughly forty seconds. Failed inference attempts remain queued for retry and surface a temporary availability warning in the desktop.
+Goal identification runs every twenty seconds and prompts after one high-confidence inference result. The existing 0.8 confidence threshold prevents low-confidence activity noise from opening confirmation. Failed inference attempts remain queued for retry and surface a temporary availability warning in the desktop.
 
 The desktop process itself is excluded before observations enter the upload queue so opening Continuity cannot alter or reset inferred user intent.
 
