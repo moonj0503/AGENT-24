@@ -1,6 +1,8 @@
 import {
   ObservationIngestionResultSchema,
   type ActivityEvent,
+  type Checkpoint,
+  type GapSession,
   type Goal,
   type GoalInferenceResult,
   type ObservationRequest,
@@ -11,6 +13,22 @@ export class InMemoryWorkflowRepository implements WorkflowRepository {
   private readonly eventsByWorkSession = new Map<string, Map<string, ActivityEvent>>();
   private readonly inferences = new Map<string, StoredGoalInference>();
   private readonly goals = new Map<string, Goal>();
+  private readonly checkpoints = new Map<string, Checkpoint>();
+  private readonly gapSessions = new Map<string, GapSession>();
+
+  constructor(initial: {
+    readonly goals?: readonly Goal[];
+    readonly checkpoints?: readonly Checkpoint[];
+    readonly gapSessions?: readonly GapSession[];
+  } = {}) {
+    for (const goal of initial.goals ?? []) this.goals.set(goal.goalId, goal);
+    for (const checkpoint of initial.checkpoints ?? []) {
+      this.checkpoints.set(checkpoint.checkpointId, checkpoint);
+    }
+    for (const gapSession of initial.gapSessions ?? []) {
+      this.gapSessions.set(gapSession.gapId, gapSession);
+    }
+  }
 
   async ingestObservations(request: ObservationRequest) {
     const events = this.eventsByWorkSession.get(request.workSessionId) ?? new Map<string, ActivityEvent>();
@@ -43,5 +61,17 @@ export class InMemoryWorkflowRepository implements WorkflowRepository {
 
   async saveGoal(_inferenceId: string, goal: Goal): Promise<void> {
     this.goals.set(goal.goalId, goal);
+  }
+
+  async getGoal(goalId: string): Promise<Goal | null> {
+    return this.goals.get(goalId) ?? null;
+  }
+
+  async getCheckpoint(checkpointId: string): Promise<Checkpoint | null> {
+    return this.checkpoints.get(checkpointId) ?? null;
+  }
+
+  async getGapSession(gapId: string): Promise<GapSession | null> {
+    return this.gapSessions.get(gapId) ?? null;
   }
 }
