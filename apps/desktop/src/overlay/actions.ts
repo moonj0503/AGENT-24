@@ -1,9 +1,9 @@
-import { startGap, updateAction, type GapData } from "../features/gap/api";
+import { updateAction, type GapData } from "../features/gap/api";
 
 export type GapStartAction = () => Promise<GapData>;
 
 /** Creates a confirmation handler whose request can only be issued once. */
-export function createGapStartAction(request: GapStartAction = startGap): GapStartAction {
+export function createGapStartAction(request: GapStartAction): GapStartAction {
   let pending: Promise<GapData> | undefined;
   return () => {
     pending ??= request();
@@ -12,5 +12,5 @@ export function createGapStartAction(request: GapStartAction = startGap): GapSta
 }
 
 export function createApprovalAction(gap: GapData, actionId: string, status: "COMPLETED" | "REJECTED") {
-  return updateAction(actionId, status).then((next) => ({ ...next, session: { ...gap.session, ...next.session } }));
+  return updateAction(gap, actionId, status === "COMPLETED" ? "APPROVE" : "REJECT");
 }
