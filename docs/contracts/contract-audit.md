@@ -127,8 +127,9 @@ These are the next tasks after this audit, in priority order:
 2. Add a policy evaluation result schema and fixture.
 3. Make SSE payloads event-specific or define a documented payload mapping.
 4. Add schema tests for all existing and new fixtures.
-5. Replace in-memory idempotency/workflow storage with persistent repositories and connect repository/service errors to `ApiHttpError`.
-6. Announce the frozen contract and route all later changes through `chore/contracts-v2`.
+5. Apply and integration-test the new PostgreSQL migration, then add TTL cleanup and a migration runner.
+6. Continue the route → service → repository pattern for checkpoints, Gaps, actions, and recovery.
+7. Announce the frozen contract and route all later changes through `chore/contracts-v2`.
 
 ## Audit conclusion
 

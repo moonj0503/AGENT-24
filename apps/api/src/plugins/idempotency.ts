@@ -2,23 +2,21 @@ import { createHash } from "node:crypto";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { IdempotencyKeySchema } from "@continuity/contracts";
 import { ApiHttpError } from "./error-handler.js";
-
-type CompletedResponse = {
-  readonly state: "COMPLETED";
-  readonly fingerprint: string;
-  readonly statusCode: number;
-  readonly payload: string;
-  readonly contentType?: string;
-};
+import type {
+  CompletedIdempotencyResponse,
+  IdempotencyRepository,
+  IdempotencyResponse,
+  IdempotencyStartResult,
+} from "../repositories/idempotency-repository.js";
 
 type PendingResponse = {
   readonly state: "PENDING";
   readonly fingerprint: string;
-  readonly completed: Promise<CompletedResponse>;
-  readonly resolve: (response: CompletedResponse) => void;
+  readonly completed: Promise<CompletedIdempotencyResponse>;
+  readonly resolve: (response: CompletedIdempotencyResponse) => void;
 };
 
-type IdempotencyRecord = CompletedResponse | PendingResponse;
+type IdempotencyRecord = CompletedIdempotencyResponse | PendingResponse;
 
 type RequestContext = {
   readonly key: string;
@@ -60,16 +58,12 @@ function serializedPayload(payload: unknown): string {
 export class InMemoryIdempotencyStore {
   private readonly records = new Map<string, IdempotencyRecord>();
 
-  start(key: string, fingerprint: string):
-    | { readonly kind: "NEW" }
-    | { readonly kind: "REPLAY"; readonly response: CompletedResponse }
-    | { readonly kind: "WAIT"; readonly completed: Promise<CompletedResponse> }
-    | { readonly kind: "CONFLICT" } {
+  async start(key: string, fingerprint: string): Promise<IdempotencyStartResult> {
     const existing = this.records.get(key);
 
     if (!existing) {
-      let resolve!: (response: CompletedResponse) => void;
-      const completed = new Promise<CompletedResponse>((complete) => {
+      let resolve!: (response: CompletedIdempotencyResponse) => void;
+      const completed = new Promise<CompletedIdempotencyResponse>((complete) => {
         resolve = complete;
       });
       this.records.set(key, { state: "PENDING", fingerprint, completed, resolve });
@@ -87,13 +81,13 @@ export class InMemoryIdempotencyStore {
     return { kind: "WAIT", completed: existing.completed };
   }
 
-  complete(key: string, fingerprint: string, response: Omit<CompletedResponse, "state" | "fingerprint">): void {
+  async complete(key: string, fingerprint: string, response: IdempotencyResponse): Promise<void> {
     const existing = this.records.get(key);
     if (!existing || existing.state !== "PENDING" || existing.fingerprint !== fingerprint) {
       return;
     }
 
-    const completed: CompletedResponse = {
+    const completed: CompletedIdempotencyResponse = {
       state: "COMPLETED",
       fingerprint,
       ...response,
@@ -103,7 +97,7 @@ export class InMemoryIdempotencyStore {
   }
 }
 
-function sendReplay(reply: FastifyReply, response: CompletedResponse): FastifyReply {
+function sendReplay(reply: FastifyReply, response: CompletedIdempotencyResponse): FastifyReply {
   if (response.contentType) {
     reply.header("content-type", response.contentType);
   }
@@ -115,7 +109,7 @@ function isStateChangingRequest(request: FastifyRequest): boolean {
   return ["POST", "PUT", "PATCH", "DELETE"].includes(request.method);
 }
 
-export function registerIdempotency(app: FastifyInstance, store = new InMemoryIdempotencyStore): void {
+export function registerIdempotency(app: FastifyInstance, store: IdempotencyRepository = new InMemoryIdempotencyStore()): void {
   const contexts = new WeakMap<FastifyRequest, RequestContext>();
 
   app.addHook("preHandler", async (request, reply) => {
@@ -133,7 +127,7 @@ export function registerIdempotency(app: FastifyInstance, store = new InMemoryId
     const key = keyResult.data;
 
     const fingerprint = requestFingerprint(request);
-    const result = store.start(key, fingerprint);
+    const result = await store.start(key, fingerprint);
     if (result.kind === "CONFLICT") {
       throw new ApiHttpError(
         "IDEMPOTENCY_KEY_REUSED",
@@ -158,7 +152,7 @@ export function registerIdempotency(app: FastifyInstance, store = new InMemoryId
 
     const headerValue = reply.getHeader("content-type");
     const contentType = typeof headerValue === "string" ? headerValue : undefined;
-    store.complete(context.key, context.fingerprint, {
+    await store.complete(context.key, context.fingerprint, {
       statusCode: reply.statusCode,
       payload: serializedPayload(payload),
       contentType,
