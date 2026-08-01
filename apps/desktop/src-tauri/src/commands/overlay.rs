@@ -34,6 +34,7 @@ pub fn overlay_position(
 #[tauri::command]
 pub fn show_overlay(app: AppHandle) -> Result<(), String> {
     let overlay = overlay_window(&app)?;
+    overlay.set_shadow(false).map_err(|error| error.to_string())?;
     position_overlay_window(&app, &overlay)?;
     overlay.set_always_on_top(true).map_err(|error| error.to_string())?;
     overlay.show().map_err(|error| error.to_string())?;
