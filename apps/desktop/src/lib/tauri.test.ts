@@ -41,6 +41,6 @@ describe("frontend native integration fallback", () => {
     const brief: RecoveryBrief = { briefId: "brief-001", gapId: "gap-001", goalBeforeGap: "Report", completedActions: [], pendingActions: [], externalEffects: [], recommendedNextAction: { title: "Resume", estimatedMinutes: 1 }, createdAt: "2026-08-01T09:48:00.000Z" };
     await showRecoveryOverlay(brief);
     expect(invoked).toEqual(["hide_overlay", "show_overlay"]);
-    expect(emitted?.name).toBe("overlay.recovery-ready");
+    expect(emitted?.name).toBe("overlay:recovery-ready");
   });
 });

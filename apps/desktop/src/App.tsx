@@ -8,7 +8,7 @@ import { type GapData } from "./features/gap/api";
 import { GapStartOverlay } from "./overlay/components/GapStartOverlay";
 import { ApprovalOverlay } from "./overlay/components/ApprovalOverlay";
 import { dismissOverlay, setApprovalRequired, setGapStartConfirmation, useOverlaySnapshot } from "./overlay/overlay-store";
-import { emitOverlayEvent, isNativeOverlayAvailable, listenForTauriEvent, openMainWindow, showOverlay, showRecoveryOverlay, TAURI_EVENTS } from "./lib/tauri";
+import { isNativeOverlayAvailable, listenForTauriEvent, openMainWindow, showOverlayForEvent, showRecoveryOverlay, TAURI_EVENTS } from "./lib/tauri";
 import { OverlayRoot } from "./overlay/OverlayRoot";
 
 type Screen = "dashboard" | "goal" | "gap" | "recovery" | "permissions" | "history";
@@ -47,16 +47,14 @@ export function App() {
   function requestGoalConfirmation() {
     if (!inference) return;
     if (isNativeOverlayAvailable()) {
-      void emitOverlayEvent(TAURI_EVENTS.GOAL_CONFIRMATION, { inference });
-      void showOverlay();
+      void showOverlayForEvent(TAURI_EVENTS.GOAL_CONFIRMATION, { inference });
     } else setScreen("goal");
   }
 
   function requestGapStart() {
     setGapStartConfirmation(goal);
     if (isNativeOverlayAvailable()) {
-      void emitOverlayEvent(TAURI_EVENTS.GAP_START_CONFIRMATION, { selectedGoal: goal });
-      void showOverlay();
+      void showOverlayForEvent(TAURI_EVENTS.GAP_START_CONFIRMATION, { selectedGoal: goal });
     }
   }
 
@@ -93,8 +91,7 @@ export function App() {
     if (!gap) return;
     setApprovalRequired(gap, actionId);
     if (isNativeOverlayAvailable()) {
-      void emitOverlayEvent(TAURI_EVENTS.APPROVAL_REQUIRED, { gap, actionId });
-      void showOverlay();
+      void showOverlayForEvent(TAURI_EVENTS.APPROVAL_REQUIRED, { gap, actionId });
     }
   }
 

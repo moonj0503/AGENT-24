@@ -3,12 +3,13 @@ import type { GapData } from "../features/gap/api";
 import type { GoalCandidate, GoalInferenceResult, RecoveryBrief } from "@continuity/contracts";
 
 export const TAURI_EVENTS = {
-  GOAL_CONFIRMATION: "overlay.goal-confirmation",
-  GAP_START_CONFIRMATION: "overlay.gap-start-confirmation",
-  APPROVAL_REQUIRED: "overlay.approval-required",
-  RECOVERY_READY: "overlay.recovery-ready",
-  DISMISS: "overlay.dismiss",
-  MAIN_NAVIGATE: "main.navigate",
+  GOAL_CONFIRMATION: "overlay:goal-confirmation",
+  GAP_START_CONFIRMATION: "overlay:gap-start-confirmation",
+  APPROVAL_REQUIRED: "overlay:approval-required",
+  RECOVERY_READY: "overlay:recovery-ready",
+  DISMISS: "overlay:dismiss",
+  MAIN_NAVIGATE: "main:navigate",
+  WINDOW_FOCUS: "window:focus",
 } as const;
 
 export const MAIN_SCREEN_IDS = [
@@ -28,6 +29,7 @@ export type TauriEventPayloads = {
   [TAURI_EVENTS.RECOVERY_READY]: { brief: RecoveryBrief & { gapDurationSeconds?: number } };
   [TAURI_EVENTS.DISMISS]: undefined;
   [TAURI_EVENTS.MAIN_NAVIGATE]: MainScreen;
+  [TAURI_EVENTS.WINDOW_FOCUS]: undefined;
 };
 
 type TauriBridge = {
@@ -56,10 +58,22 @@ export async function invokeNative(command: string, args?: Record<string, unknow
   return window.__TAURI__?.core?.invoke?.(command, args);
 }
 
-export async function showOverlay(): Promise<boolean> {
+let overlayOperation: Promise<void> = Promise.resolve();
+
+function queueOverlayOperation<T>(operation: () => Promise<T>): Promise<T> {
+  const next = overlayOperation.then(operation, operation);
+  overlayOperation = next.then(() => undefined, () => undefined);
+  return next;
+}
+
+async function invokeShowOverlay(): Promise<boolean> {
   if (!isNativeOverlayAvailable()) return false;
   await invokeNative("show_overlay");
   return true;
+}
+
+export function showOverlay(): Promise<boolean> {
+  return queueOverlayOperation(invokeShowOverlay);
 }
 
 export async function emitTauriEvent<N extends TauriEventName>(name: N, payload: TauriEventPayloads[N]): Promise<boolean> {
@@ -68,19 +82,32 @@ export async function emitTauriEvent<N extends TauriEventName>(name: N, payload:
   return true;
 }
 
-export const emitOverlayEvent = emitTauriEvent;
-
-export async function showRecoveryOverlay(brief: RecoveryBrief): Promise<boolean> {
-  if (!isNativeOverlayAvailable()) return false;
-  await emitOverlayEvent(TAURI_EVENTS.RECOVERY_READY, { brief });
-  await showOverlay();
-  return true;
+export async function emitOverlayEvent<N extends TauriEventName>(name: N, payload: TauriEventPayloads[N]): Promise<boolean> {
+  return emitTauriEvent(name, payload);
 }
 
-export async function hideOverlay(): Promise<boolean> {
-  if (!isNativeOverlayAvailable()) return false;
-  await invokeNative("hide_overlay");
-  return true;
+export async function showOverlayForEvent<N extends TauriEventName>(name: N, payload: TauriEventPayloads[N]): Promise<boolean> {
+  return queueOverlayOperation(async () => {
+    if (!isNativeOverlayAvailable()) return false;
+    await invokeShowOverlay();
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await emitOverlayEvent(name, payload);
+      if (attempt < 2) await new Promise((resolve) => globalThis.setTimeout(resolve, 50));
+    }
+    return true;
+  });
+}
+
+export async function showRecoveryOverlay(brief: RecoveryBrief): Promise<boolean> {
+  return showOverlayForEvent(TAURI_EVENTS.RECOVERY_READY, { brief });
+}
+
+export function hideOverlay(): Promise<boolean> {
+  return queueOverlayOperation(async () => {
+    if (!isNativeOverlayAvailable()) return false;
+    await invokeNative("hide_overlay");
+    return true;
+  });
 }
 
 export async function openMainWindow(screen: MainScreen): Promise<boolean> {
@@ -109,7 +136,7 @@ function isMainScreen(value: unknown): value is MainScreen {
 }
 
 function parseTauriEventPayload<N extends TauriEventName>(name: N, payload: unknown): TauriEventPayloads[N] | undefined {
-  if (name === TAURI_EVENTS.DISMISS) return undefined;
+  if (name === TAURI_EVENTS.DISMISS || name === TAURI_EVENTS.WINDOW_FOCUS) return undefined;
   if (name === TAURI_EVENTS.MAIN_NAVIGATE) return isMainScreen(payload) ? payload as unknown as TauriEventPayloads[N] : undefined;
   if (!isRecord(payload)) return undefined;
   if (name === TAURI_EVENTS.GOAL_CONFIRMATION && isRecord(payload.inference)) return payload as TauriEventPayloads[N];

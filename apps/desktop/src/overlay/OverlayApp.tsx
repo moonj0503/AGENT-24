@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { fetchGoalInference, selectGoal } from "../features/goals/api";
 import { createApprovalAction, createGapStartAction } from "./actions";
-import { dismissOverlay, openOverlay, useOverlaySnapshot } from "./overlay-store";
+import { dismissOverlay, getOverlaySnapshot, openOverlay, useOverlaySnapshot } from "./overlay-store";
 import { OverlayRoot } from "./OverlayRoot";
 import { listenForTauriEvent, openMainWindow, TAURI_EVENTS } from "../lib/tauri";
 import type { GoalCandidate } from "@continuity/contracts";
@@ -11,14 +11,23 @@ export function OverlayApp() {
   useEffect(() => {
     let active = true;
     const cleanups: Array<() => void> = [];
+    const restoreGoalAfterFocus = () => {
+      const state = getOverlaySnapshot().state;
+      if (state !== null && state !== "HIDDEN") return;
+      void fetchGoalInference().then((nextInference) => {
+        const nextState = getOverlaySnapshot().state;
+        if (active && (nextState === null || nextState === "HIDDEN")) openOverlay({ state: "GOAL_CONFIRMATION", inference: nextInference });
+      }).catch(() => undefined);
+    };
     void Promise.all([
       listenForTauriEvent(TAURI_EVENTS.GOAL_CONFIRMATION, (payload) => { if (active) openOverlay({ state: "GOAL_CONFIRMATION", ...payload }); }),
       listenForTauriEvent(TAURI_EVENTS.GAP_START_CONFIRMATION, (payload) => { if (active) openOverlay({ state: "GAP_START_CONFIRMATION", ...payload }); }),
       listenForTauriEvent(TAURI_EVENTS.APPROVAL_REQUIRED, (payload) => { if (active) openOverlay({ state: "APPROVAL_REQUIRED", ...payload }); }),
       listenForTauriEvent(TAURI_EVENTS.RECOVERY_READY, (payload) => { if (active) openOverlay({ state: "RECOVERY_READY", ...payload }); }),
+      listenForTauriEvent(TAURI_EVENTS.WINDOW_FOCUS, restoreGoalAfterFocus),
     ]).then((unsubscribes) => { if (active) cleanups.push(...unsubscribes); else unsubscribes.forEach((cleanup) => cleanup()); });
     void fetchGoalInference().then((inference) => {
-      if (active && !snapshot.state) openOverlay({ state: "GOAL_CONFIRMATION", inference });
+      if (active && !getOverlaySnapshot().state) openOverlay({ state: "GOAL_CONFIRMATION", inference });
     }).catch(() => undefined);
     return () => { active = false; cleanups.forEach((cleanup) => cleanup()); };
   }, []);
