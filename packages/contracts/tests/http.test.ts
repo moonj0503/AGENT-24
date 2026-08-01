@@ -9,6 +9,7 @@ import {
   EndGapRequestSchema,
   GoalInferenceRequestSchema,
   IdempotencyKeySchema,
+  ObservationIngestionResultSchema,
   ObservationRequestSchema,
   StartGapRequestSchema,
 } from "../src/index.js";
@@ -21,6 +22,7 @@ const fixture = (name: string) => JSON.parse(readFileSync(
 describe("HTTP request contracts", () => {
   it("accepts the observation and goal inference request fixtures", () => {
     expect(ObservationRequestSchema.safeParse(fixture("observation-request.json")).success).toBe(true);
+    expect(ObservationIngestionResultSchema.safeParse(fixture("observation-result.json")).success).toBe(true);
     expect(GoalInferenceRequestSchema.safeParse(fixture("goal-inference-request.json")).success).toBe(true);
   });
 
