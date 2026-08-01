@@ -12,6 +12,8 @@ import { InMemoryAgentEventBus } from "./features/workflow/event-bus.js";
 import { registerEventRoutes } from "./features/workflow/event-routes.js";
 import { registerHistoryRoutes } from "./features/workflow/history-routes.js";
 import type { GapHistoryService } from "./services/gap-history-service.js";
+import { registerChatRoutes } from "./features/chat/routes.js";
+import type { ResponsesChatService } from "./features/chat/responses-chat-service.js";
 
 export interface AppDependencies {
   workflowService?: WorkflowService;
@@ -20,6 +22,7 @@ export interface AppDependencies {
   gapLifecycleService?: GapLifecycleService;
   gapHistoryService?: GapHistoryService;
   eventBus?: InMemoryAgentEventBus;
+  chatService?: ResponsesChatService;
 }
 
 const desktopOrigins = new Set([
@@ -55,6 +58,7 @@ export function buildApp(dependencies: AppDependencies = {}) {
   app.get("/api/v1/health", async () => ({ status: "ok" }));
   registerWorkflowRoutes(app, dependencies.workflowService ?? createInMemoryWorkflowService(undefined, eventBus));
   registerEventRoutes(app, eventBus);
+  registerChatRoutes(app, dependencies.chatService);
   if (dependencies.gapLifecycleService) {
     registerLifecycleRoutes(app, dependencies.gapLifecycleService);
   }

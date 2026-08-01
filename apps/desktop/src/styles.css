@@ -218,3 +218,26 @@ html:has(.overlay-shell), body:has(.overlay-shell), body:has(.overlay-shell) #ro
   .hero { padding: 25px; }
   .hero-art { display: none; }
 }
+.chat-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(360px, .9fr); gap: 18px; align-items: start; max-width: 1280px; }
+.chat-main, .raw-stream { min-height: 520px; }
+.chat-main h2, .raw-stream h2 { margin: 0 0 16px; font-size: 20px; }
+.chat-answer { min-height: 280px; white-space: pre-wrap; line-height: 1.65; color: var(--color-text-secondary); padding: 16px; border-radius: 9px; background: var(--color-surface-subtle); }
+.chat-form { display: grid; gap: 10px; margin-top: 16px; }
+.chat-form textarea { width: 100%; resize: vertical; font: inherit; padding: 10px; border: 1px solid var(--color-border-strong); border-radius: 8px; }
+.chat-form button { justify-self: end; }
+.raw-stream-heading { display: flex; gap: 12px; justify-content: space-between; align-items: start; }
+.raw-stream-heading .button { padding: 8px 10px; font-size: 12px; white-space: nowrap; }
+.raw-events { max-height: 420px; overflow: auto; }
+.raw-event { padding: 10px 0; border-top: 1px solid var(--color-border); }
+.raw-event > div { display: flex; gap: 8px; align-items: center; }
+.raw-event time { color: var(--color-text-muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.raw-badge { border-radius: 999px; padding: 3px 7px; font-size: 10px; font-weight: 700; background: var(--color-surface-subtle); color: var(--color-primary-dark); }
+.raw-badge.text { background: var(--color-success-soft); color: var(--color-success); }
+.raw-badge.arguments { background: var(--color-warning-soft); color: var(--color-warning); }
+.raw-badge.tool-call { background: #ede9fe; color: #6d4bc1; }
+.raw-badge.tool-result { background: #e0f2fe; color: #147aa8; }
+.raw-badge.error { background: var(--color-error-soft); color: var(--color-error); }
+.raw-event details { margin-top: 8px; }
+.raw-event summary { cursor: pointer; color: var(--color-text-secondary); font-size: 12px; }
+.raw-event pre { max-height: 220px; overflow: auto; white-space: pre-wrap; margin: 7px 0 0; padding: 9px; border-radius: 6px; background: #172b3a; color: #e8f3f8; font-size: 11px; }
+@media (max-width: 980px) { .chat-layout { grid-template-columns: 1fr; } .chat-main, .raw-stream { min-height: auto; } }
