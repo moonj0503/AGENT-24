@@ -29,6 +29,11 @@ export const policyRules = {
     decision: "AUTO_EXECUTE",
     reason: "Generating an internal recovery brief is a low-risk action.",
   },
+  EDIT_APPROVED_TEXT_FILE: {
+    canonicalRiskLevel: "MEDIUM",
+    decision: "REQUIRE_APPROVAL",
+    reason: "Editing an existing local file requires an exact, user-created file authorization.",
+  },
   SEND_EMAIL: {
     canonicalRiskLevel: "HIGH",
     decision: "DOWNGRADE",

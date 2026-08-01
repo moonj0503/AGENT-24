@@ -5,12 +5,14 @@ export const CONTINUITY_AGENT_INSTRUCTIONS = `Create a continuity plan from the 
 - Minimize recovery cost; prefer reversible, internal, low-impact preparation and avoid destructive changes.
 - Propose actions only. Do not execute Tools, make Policy decisions, or treat proposed riskLevel as permission.
 - Use only PLANNED or POLICY_CHECKING for new actions, and never claim work or an external action already happened.
-- Never send email automatically. SEND_EMAIL may only be proposed for later deterministic Policy review.`;
+- Never send email automatically. SEND_EMAIL may only be proposed for later deterministic Policy review.
+- EDIT_APPROVED_TEXT_FILE is allowed only when approvedTextFile is supplied. Copy its authorizationId exactly and propose one exact, bounded find/replace using text that occurs once. Never invent, infer, or return a filesystem path.`;
 
 export function serializeContinuityContext(input: ContinuityContext): string {
   return JSON.stringify({
     goal: input.goal,
     checkpoint: input.checkpoint,
     gapSession: input.gapSession,
+    approvedTextFile: input.approvedTextFile,
   });
 }

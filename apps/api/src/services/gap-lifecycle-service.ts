@@ -3,6 +3,7 @@ import {
   CheckpointSchema,
   GapSessionSchema,
   PlannedActionSchema,
+  RecoveryBriefSchema,
   type ActionApprovalParams,
   type ActionApprovalRequest,
   type Checkpoint,
@@ -93,7 +94,13 @@ export class GapLifecycleService {
 
     let result;
     let updated = PlannedActionSchema.parse({ ...action, status: request.decision === "APPROVE" ? "EXECUTING" : "REJECTED" });
-    if (request.decision === "APPROVE") {
+    if (request.decision === "APPROVE" && request.executionResult) {
+      if (request.executionResult.actionId !== action.actionId) throw new ApiHttpError("CONFLICT", "The native execution result does not match the approved action.");
+      if (action.type !== "EDIT_APPROVED_TEXT_FILE" || !action.textEdit || !request.executionResult.fileEditAudit) throw new ApiHttpError("CONFLICT", "Only approved native file edits may supply an execution result.");
+      if (request.executionResult.fileEditAudit.before !== action.textEdit.find || request.executionResult.fileEditAudit.after !== action.textEdit.replace) throw new ApiHttpError("CONFLICT", "The native edit audit does not match the approved bounded patch.");
+      result = request.executionResult;
+      updated = PlannedActionSchema.parse({ ...updated, status: result.status });
+    } else if (request.decision === "APPROVE") {
       const evaluation = this.policy.evaluate(action);
       result = await this.tools.executeApproved(updated, evaluation, { occurredAt: this.clock.now() });
       updated = PlannedActionSchema.parse({ ...updated, status: result.status });
@@ -101,6 +108,15 @@ export class GapLifecycleService {
     try {
       await this.repository.updateAction(params.gapId, updated, request.decision, request.reason);
       if (result) await this.repository.saveActionResult(params.gapId, result);
+      if (result?.fileEditAudit && result.status === "COMPLETED") {
+        const brief = await this.repository.getRecoveryBrief(params.gapId);
+        if (brief) await this.repository.saveRecoveryBrief(RecoveryBriefSchema.parse({
+          ...brief,
+          completedActions: [...brief.completedActions.filter((item) => item !== action.title), action.title],
+          pendingActions: brief.pendingActions.filter((item) => item !== action.title),
+          externalEffects: [...brief.externalEffects, result.externalEffect],
+        }));
+      }
     } catch (cause) {
       throw new ApiHttpError("DATABASE_FAILURE", "The planned action could not be updated.", { cause });
     }

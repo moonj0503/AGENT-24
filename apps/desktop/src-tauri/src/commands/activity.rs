@@ -107,6 +107,17 @@ impl ObserverState {
             .into_iter().map(|value| value.trim().to_lowercase()).filter(|value| !value.is_empty()).collect();
     }
 
+    pub fn capture_allowed(&self) -> Result<bool, String> {
+        let Some(snapshot) = self.read_snapshot()?.and_then(sanitize_snapshot) else { return Ok(false); };
+        let application = snapshot.application_name.trim().to_lowercase();
+        if application == "continuity-desktop" { return Ok(false); }
+        Ok(!self.user_blocked_applications
+            .lock()
+            .map_err(|_| "privacy settings lock poisoned".to_owned())?
+            .iter()
+            .any(|blocked| blocked == &application))
+    }
+
     fn read_snapshot(&self) -> Result<Option<RawWindowSnapshot>, String> {
         if let Some(snapshot) = self
             .test_snapshot

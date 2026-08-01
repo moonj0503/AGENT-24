@@ -13,6 +13,7 @@ export const OBSERVATION_WORKFLOW_ERROR_EVENT = "continuity:observation-workflow
 
 export interface ObservationSessionConfig {
   readonly observationIntervalMs: number;
+  readonly screenshotIntervalMs: number;
   readonly uploadIntervalMs: number;
   readonly inferenceIntervalMs: number;
   readonly confidenceThreshold: number;
@@ -43,6 +44,7 @@ export interface GoalConfirmationRequested {
 
 export interface ObservationSessionDependencies {
   readonly collectActivity: () => Promise<ActivityEvent | null>;
+  readonly captureScreenshot?: () => Promise<void>;
   readonly upload: (
     workSessionId: string,
     events: readonly ActivityEvent[],

@@ -15,6 +15,7 @@ export interface RuntimeInput {
   readonly checkpoint: Checkpoint;
   readonly gapSession: GapSession;
   readonly occurredAt: string;
+  readonly approvedTextFile?: { readonly authorizationId: string; readonly fileName: string; readonly content: string };
 }
 
 export interface RuntimeResult {

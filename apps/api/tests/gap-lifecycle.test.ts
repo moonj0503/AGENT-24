@@ -132,3 +132,17 @@ it("records rejection without executing an approval-gated action", async () => {
   expect(stored?.result).toBeUndefined();
   await app.close();
 });
+
+it("accepts only a matching native file-edit audit and updates recovery history", async () => {
+  const repository = new InMemoryWorkflowRepository({ goals: [goal] }); const events = new InMemoryAgentEventBus();
+  const service = createGapLifecycleService(repository, events, { now: () => "2026-08-02T12:00:00.000Z" });
+  const checkpoint = await service.createCheckpoint({ goalId: goal.goalId, currentState: "Edit notes.", completedSincePrevious: [], openQuestions: [], likelyNextActions: [], relatedResources: [], confidence: 0.8 });
+  const gap = await service.startGap({ workSessionId: "ws-edit-001", goalId: goal.goalId, checkpointId: checkpoint.checkpointId });
+  await repository.saveActionPlan({ planId: "plan-edit-001", gapId: gap.gapId, continuityObjective: "Edit approved notes.", actions: [{ actionId: "action-edit-001", type: "EDIT_APPROVED_TEXT_FILE", title: "Finish notes", reason: "The file was approved.", riskLevel: "MEDIUM", reversible: true, status: "WAITING_APPROVAL", textEdit: { authorizationId: "auth-001", find: "old", replace: "new" } }] });
+  await repository.saveRecoveryBrief({ briefId: "brief-edit-001", gapId: gap.gapId, goalBeforeGap: goal.title, completedActions: [], pendingActions: ["Finish notes"], externalEffects: [], recommendedNextAction: { title: "Review", estimatedMinutes: 1 }, createdAt: "2026-08-02T12:00:00.000Z" });
+  const app = buildApp({ gapLifecycleService: service, eventBus: events });
+  const response = await app.inject({ method: "POST", url: `/api/v1/gaps/${gap.gapId}/actions/action-edit-001/approval`, headers: { "idempotency-key": "edit-approval-001" }, payload: { decision: "APPROVE", executionResult: { actionId: "action-edit-001", status: "COMPLETED", summary: "Applied.", externalEffect: "Updated C:\\notes.txt", occurredAt: "2026-08-02T12:00:00.000Z", fileEditAudit: { path: "C:\\notes.txt", backupPath: "C:\\backups\\notes.txt", before: "old", after: "new" } } } });
+  expect(response.statusCode).toBe(200);
+  expect(await repository.getRecoveryBrief(gap.gapId)).toMatchObject({ completedActions: ["Finish notes"], pendingActions: [], externalEffects: ["Updated C:\\notes.txt"] });
+  await app.close();
+});

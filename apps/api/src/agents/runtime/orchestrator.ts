@@ -78,6 +78,7 @@ export class FixtureRuntimeOrchestrator implements RuntimeOrchestrator {
         goal: input.goal,
         checkpoint: input.checkpoint,
         gapSession: input.gapSession,
+        approvedTextFile: input.approvedTextFile,
       });
     } catch (error) {
       throw dependencyError("CONTINUITY", error);
@@ -102,6 +103,10 @@ export class FixtureRuntimeOrchestrator implements RuntimeOrchestrator {
         );
       }
       actionResults.push(result);
+    }
+
+    if (policyEvaluations.some((evaluation) => evaluation.decision === "REQUIRE_APPROVAL")) {
+      actionPlan = { ...actionPlan, actions: actionPlan.actions.map((action, index) => policyEvaluations[index]?.decision === "REQUIRE_APPROVAL" ? { ...action, status: "WAITING_APPROVAL" as const } : action) };
     }
 
     let recoveryBrief: RecoveryBrief;

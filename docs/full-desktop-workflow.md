@@ -12,6 +12,10 @@ The desktop process itself is excluded before observations enter the upload queu
 
 Safe draft-producing actions create persisted internal artifacts. TODO drafts, message drafts (including downgraded send-email actions), and organized reference notes are returned with the runtime response and stored against their Gap and action. Recovery displays full active artifact content and supports copy, edit, and discard. Artifact edits remain internal and have no external effect.
 
+During Gap observation, the native desktop captures the active Windows application window once at start and at most every twenty seconds afterward. Capture is skipped when the foreground application is blocked by the existing privacy settings. Screenshots stay in the local Tauri app-data `screenshots` directory, identical consecutive frames are deduplicated, files older than twenty-four hours are removed, and each work session retains at most thirty captures. Screenshots are not uploaded through the Observation API or sent to an Agent provider.
+
+Recovery and History artifacts can be exported as `.txt` or `.md`. The native file tool accepts only a plain file name, caps content at one megabyte, and writes exclusively inside the Tauri app-data `exports` directory. Re-exporting the same artifact and format updates that scoped file. Arbitrary paths and original documents remain inaccessible.
+
 Artifact endpoints follow the existing API composition: `GET /api/v1/gaps/:gapId/artifacts`, `GET /api/v1/artifacts/:artifactId`, and idempotent `PATCH /api/v1/artifacts/:artifactId`.
 
 The desktop workflow controller is the authoritative owner of backend-returned IDs and lifecycle objects. The observation session remains responsible for inference scheduling and persistence. Direct HTTP responses are authoritative for user-triggered mutations; broad SSE synchronization is deferred because the current lifecycle is synchronous and does not require it.
@@ -37,6 +41,9 @@ pnpm --filter @continuity/desktop dev
 6. End the Gap and verify the same real RecoveryBrief appears in the native overlay and main Recovery screen.
 7. Open History and verify the completed Gap.
 8. Restart the desktop and verify observation preferences and confirmed Goal restoration.
+9. Start Gap Mode with an allowed foreground application and verify a local `.bmp` appears in the Tauri app-data `screenshots/<workSessionId>` directory, then verify unchanged frames do not create duplicate files.
+10. Keep Gap Mode active for at least twenty seconds and verify another changed frame is captured; foreground a blocked application and verify capture is skipped.
+11. From Recovery, export an artifact as `.md` and `.txt`, verify both files under the Tauri app-data `exports` directory, edit the artifact, and re-export to verify the scoped file is updated.
 
 ## Production and preview boundaries
 
