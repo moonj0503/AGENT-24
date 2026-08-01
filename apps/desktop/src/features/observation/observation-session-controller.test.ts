@@ -55,6 +55,7 @@ function setup(options: {
   inferences?: Array<GoalInferenceResult | Error>;
   confirmedGoal?: ReturnType<typeof GoalSchema.parse>;
   now?: () => number;
+  onUserIdle?: () => void;
 } = {}) {
   const observations = [...(options.observations ?? [])];
   const inferences = [...(options.inferences ?? [inference()])];
@@ -88,6 +89,7 @@ function setup(options: {
     canRequestConfirmation: () => true,
     onConfirmationRequested: (requested) => confirmations.push(requested),
     onWarning: (message) => warnings.push(message),
+    onUserIdle: options.onUserIdle,
     now: options.now ?? (() => Date.now()),
   };
   return {
@@ -158,6 +160,21 @@ describe("ObservationSessionController lifecycle and scheduling", () => {
     });
     await vi.advanceTimersByTimeAsync(100);
     expect(session.collectActivity).toHaveBeenCalledOnce();
+  });
+
+  it("reports a native idle transition once to the workflow lifecycle", async () => {
+    const onUserIdle = vi.fn();
+    const idleEvent: ActivityEvent = {
+      ...event("event-idle", "Report"),
+      type: "USER_IDLE",
+      metadata: { idleSeconds: 30 },
+    };
+    const session = setup({ observations: [idleEvent], onUserIdle });
+    session.controller.start();
+
+    await vi.advanceTimersByTimeAsync(10);
+
+    expect(onUserIdle).toHaveBeenCalledOnce();
   });
 
   it("pauses every cycle and resumes scheduling", async () => {
