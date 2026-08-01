@@ -15,6 +15,10 @@ export interface DesktopWorkflowControllerDependencies {
 }
 const defaults: DesktopWorkflowControllerDependencies = { createCheckpoint, createGapSession, runGap, decideGapAction, fetchGapActions, endGapSession, fetchRecoveryBrief };
 
+function errorMessage(cause: unknown): string {
+  return cause instanceof Error && cause.message ? cause.message : "An unexpected error occurred.";
+}
+
 export class DesktopWorkflowController {
   private starting?: Promise<void>;
   private ending?: Promise<RecoveryBrief>;
@@ -57,9 +61,16 @@ export class DesktopWorkflowController {
       patchDesktopWorkflowState({ checkpoint });
       const gapSession = current.gapSession ?? await this.dependencies.createGapSession(current.workSessionId, goal.goalId, checkpoint.checkpointId);
       patchDesktopWorkflowState({ gapSession });
-      const approvals = await listApprovedTextFiles();
-      const approved = approvals.find((item) => item.scope === "GAP") ?? approvals.find((item) => item.scope === "ALWAYS");
-      const fileContext = approved ? await readApprovedTextFile(approved.authorizationId) : undefined;
+      let approved: Awaited<ReturnType<typeof listApprovedTextFiles>>[number] | undefined;
+      let fileContext: Awaited<ReturnType<typeof readApprovedTextFile>> | undefined;
+      try {
+        const approvals = await listApprovedTextFiles();
+        approved = approvals.find((item) => item.scope === "GAP") ?? approvals.find((item) => item.scope === "ALWAYS");
+        fileContext = approved ? await readApprovedTextFile(approved.authorizationId) : undefined;
+      } catch {
+        // A stale optional file approval must not prevent the core Gap workflow.
+        approved = undefined;
+      }
       const runtime = fileContext ? await this.dependencies.runGap(gapSession, fileContext) : await this.dependencies.runGap(gapSession);
       const awaitingApproval = runtime.actionPlan.actions.some((action) => action.status === "WAITING_APPROVAL");
       patchDesktopWorkflowState({ actionPlan: runtime.actionPlan, actionResults: runtime.actionResults, artifacts: runtime.artifacts, recoveryBrief: runtime.recoveryBrief, phase: awaitingApproval ? "AWAITING_APPROVAL" : "GAP_ACTIVE", pending: false });
@@ -70,9 +81,10 @@ export class DesktopWorkflowController {
         }
       }
       if (approved?.scope === "GAP") await revokeTextFileAuthorization(approved.authorizationId);
-    } catch {
-      patchDesktopWorkflowState({ phase: "FAILED", pending: false, error: "Gap Mode could not start. Your confirmed Goal and completed setup were preserved." });
-      throw new Error("Gap Mode could not start.");
+    } catch (cause) {
+      const detail = errorMessage(cause);
+      patchDesktopWorkflowState({ phase: "FAILED", pending: false, error: "Gap Mode could not start: " + detail + " Your confirmed Goal and completed setup were preserved." });
+      throw new Error("Gap Mode could not start: " + detail);
     }
   }
   async decideAction(actionId: string, decision: "APPROVE" | "REJECT", executionResult?: import("@continuity/contracts").ActionResult): Promise<void> {

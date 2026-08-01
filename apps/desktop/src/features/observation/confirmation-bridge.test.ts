@@ -201,6 +201,16 @@ describe("GoalConfirmationBridge", () => {
     expect(start).toHaveBeenCalledOnce();
   });
 
+  it("reports the Gap start failure reason after confirming the Goal", async () => {
+    const { bridge, errors } = setup({ latestInference: inference });
+    const start = vi.fn(async () => { throw new Error("The API is unavailable."); });
+
+    await bridge.requestGapStart(start);
+    await bridge.confirmCandidate(candidate.candidateId);
+
+    expect(errors).toEqual(["The Goal was confirmed, but Gap Mode could not start: The API is unavailable."]);
+  });
+
   it("cancels the pending Gap intent when Goal confirmation is deferred", async () => {
     const { bridge, cancelled } = setup({ latestInference: inference });
     await bridge.requestGapStart(vi.fn(async () => undefined));

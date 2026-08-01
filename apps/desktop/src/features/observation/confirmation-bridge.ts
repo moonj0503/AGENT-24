@@ -247,8 +247,9 @@ export class GoalConfirmationBridge {
     if (start) {
       try {
         await start();
-      } catch {
-        this.dependencies.onError("The Goal was confirmed, but Gap Mode could not start.");
+      } catch (cause) {
+        const detail = cause instanceof Error && cause.message ? ": " + cause.message : "";
+        this.dependencies.onError("The Goal was confirmed, but Gap Mode could not start" + detail);
       }
     }
     return goal;

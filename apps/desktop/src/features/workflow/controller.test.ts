@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { ActionPlanSchema, CheckpointSchema, GapSessionSchema, GoalSchema, RecoveryBriefSchema } from "@continuity/contracts";
 import { DesktopWorkflowController, type DesktopWorkflowControllerDependencies } from "./controller";
 import { getDesktopWorkflowState } from "./store";
@@ -20,6 +20,8 @@ function dependencies(): DesktopWorkflowControllerDependencies {
     fetchRecoveryBrief: vi.fn(async () => brief),
   };
 }
+
+afterEach(() => vi.unstubAllGlobals());
 
 describe("DesktopWorkflowController", () => {
   it("runs the real-ID lifecycle once for duplicate start requests", async () => {
@@ -53,6 +55,30 @@ describe("DesktopWorkflowController", () => {
     const controller = new DesktopWorkflowController("session-real-id", goal, deps);
     await expect(controller.startGap()).rejects.toThrow("Gap Mode could not start");
     expect(getDesktopWorkflowState()).toMatchObject({ phase: "FAILED", checkpoint: { checkpointId: "checkpoint-real-id" }, gapSession: { gapId: "gap-real-id" }, pending: false });
+  });
+
+  it("continues Gap startup when the optional approved-file registry is unavailable", async () => {
+    vi.stubGlobal("window", {
+      __TAURI__: { core: { invoke: vi.fn(async (command: string) => {
+        if (command === "list_approved_text_files") throw new Error("file authorizations could not be read");
+        return undefined;
+      }) } },
+    });
+    const deps = dependencies();
+    const controller = new DesktopWorkflowController("session-real-id", goal, deps);
+
+    await expect(controller.startGap()).resolves.toBeUndefined();
+
+    expect(deps.runGap).toHaveBeenCalledWith(session);
+    expect(getDesktopWorkflowState().phase).toBe("GAP_ACTIVE");
+  });
+
+  it("preserves the operational failure reason for the user", async () => {
+    const deps = { ...dependencies(), createCheckpoint: vi.fn(async () => { throw new Error("The API is unavailable."); }) };
+    const controller = new DesktopWorkflowController("session-real-id", goal, deps);
+
+    await expect(controller.startGap()).rejects.toThrow("Gap Mode could not start: The API is unavailable.");
+    expect(getDesktopWorkflowState().error).toContain("The API is unavailable.");
   });
 
   it("ends the persisted Gap and reveals its runtime recovery brief", async () => {
