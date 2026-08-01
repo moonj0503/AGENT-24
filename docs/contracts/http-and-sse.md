@@ -67,7 +67,7 @@ Policy decisions such as `DENY` or `DOWNGRADE` are normally represented in the a
 | Same key and same fingerprint while running | The duplicate request waits for and receives the original response |
 | Same key and different fingerprint | `409 IDEMPOTENCY_KEY_REUSED` |
 
-The current store is intentionally in-memory for the mock-first MVP. It resets when the API process restarts and has no expiry policy yet; a database-backed store with a TTL is required before multi-instance or production use.
+The test default is intentionally in-memory for the mock-first MVP. The production `apps/api/src/server.ts` now wires the PostgreSQL-backed `DrizzleIdempotencyStore`. The database store uses an expiry timestamp and waits briefly for an in-progress record to complete. A scheduled cleanup job is still required for long-running deployments.
 
 ## Implementation status
 
@@ -81,8 +81,16 @@ The common error contract is implemented and connected to the Fastify applicatio
 | Fastify error conversion | Complete | `apps/api/src/plugins/error-handler.ts` |
 | Global application registration | Complete | `apps/api/src/app.ts` |
 | Error integration tests | Added | `apps/api/tests/error-handler.test.ts` |
-| Idempotency pre-handler | Complete (in-memory MVP) | `apps/api/src/plugins/idempotency.ts` |
-| First API vertical slice | Complete (in-memory MVP) | `apps/api/src/features/workflow/` |
+| Idempotency pre-handler | Complete (DB + in-memory test double) | `apps/api/src/plugins/idempotency.ts` |
+| First API vertical slice | Complete (service/repository split) | `apps/api/src/features/workflow/` |
+| Drizzle database schema | Added | `packages/db/src/schema.ts` |
+| SQL migration | Added | `packages/db/migrations/0001_workflow.sql` |
+| Migration runner | Added | `packages/db/src/migrate.ts` |
+| Workflow Repository interface | Complete | `apps/api/src/repositories/workflow-repository.ts` |
+| PostgreSQL Workflow Repository | Complete | `apps/api/src/repositories/drizzle-workflow-repository.ts` |
+| Workflow Service layer | Complete | `apps/api/src/services/workflow-service.ts` |
+| PostgreSQL Repository integration test | Added (requires `DATABASE_URL`) | `apps/api/tests/postgres-workflow.integration.test.ts` |
+| Production DB wiring | Complete | `apps/api/src/server.ts` |
 
 The Fastify handler currently converts validation errors, typed `ApiHttpError` failures, unknown routes, conflicts, and unexpected exceptions. Unexpected exceptions return a generic `INTERNAL_ERROR` message so internal details are not exposed.
 
@@ -105,16 +113,35 @@ POST /goals/confirm
 | `POST /goal-inferences` | 200 | `GoalInferenceResult` |
 | `POST /goals/confirm` | 201 | `Goal` |
 
-The workflow store is located in `apps/api/src/features/workflow/in-memory-workflow-store.ts`. It is deliberately local and resettable while the PostgreSQL/Drizzle repository layer is not implemented.
+Routes now perform request parsing and response formatting only. Business rules live in `WorkflowService`, while persistence lives behind `WorkflowRepository`.
+
+```text
+Route
+  → WorkflowService
+    → WorkflowRepository
+      → InMemoryWorkflowRepository (tests)
+      → DrizzleWorkflowRepository (production)
+        → PostgreSQL
+```
+
+`buildApp()` uses the in-memory repository by default so API tests do not need a running database. The real `server.ts` requires `DATABASE_URL` and wires `DrizzleWorkflowRepository` and `DrizzleIdempotencyStore`.
 
 ## Next implementation steps
 
-1. Replace the in-memory workflow and idempotency stores with Drizzle/PostgreSQL repositories, including idempotency TTL cleanup.
-2. Add repository and service errors that throw `ApiHttpError` instead of returning ad hoc error objects.
-3. Implement checkpoints, Gap start/end, action approval, and recovery brief REST routes.
-4. Connect the SSE publisher and verify event ordering and `Last-Event-ID` reconnection behavior.
-5. Replace the fixture Goal Interpreter through its interface with the real Member 4 agent implementation and preserve a fixture fallback.
-6. Add end-to-end tests for the complete demo flow, concurrent duplicate requests, process restart behavior, and failure scenarios.
+1. Provide a real PostgreSQL `DATABASE_URL`, then run:
+
+   ```powershell
+   $env:DATABASE_URL = "postgresql://user:password@localhost:5432/continuity"
+   corepack.cmd pnpm --filter @continuity/db migrate
+   ```
+
+2. Start the production-wired API with `corepack.cmd pnpm --filter @continuity/api dev` and verify `/health` plus the workflow flow.
+3. Run `corepack.cmd pnpm --filter @continuity/api test`; the PostgreSQL Repository test runs when `DATABASE_URL` is set and skips otherwise.
+4. Add idempotency TTL cleanup scheduling and make migration execution part of the deployment pipeline.
+5. Implement checkpoints, Gap start/end, action approval, and recovery brief REST routes.
+6. Connect the SSE publisher and verify event ordering and `Last-Event-ID` reconnection behavior.
+7. Replace the fixture Goal Interpreter through its interface with the real Member 4 agent implementation and preserve a fixture fallback.
+8. Add end-to-end tests for the complete demo flow, concurrent duplicate requests, process restart behavior, and failure scenarios.
 
 ## Request body contracts
 
