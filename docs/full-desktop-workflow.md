@@ -6,7 +6,15 @@ The production desktop composes the existing components in this order:
 
 The initial desktop action creates only a local pending Gap intent. Observation for Goal identification starts at that point, clears stale queued inference for the intent, and continues until the Gap ends. No backend GapSession and no continuity action exist before explicit Goal confirmation. Cancelling confirmation stops the pending observation. This preserves the existing backend lifecycle and contracts while making Gap Mode the user-facing entry point.
 
-Goal identification runs every twenty seconds and prompts after one high-confidence inference result. The existing 0.8 confidence threshold prevents low-confidence activity noise from opening confirmation. Failed inference attempts remain queued for retry and surface a temporary availability warning in the desktop.
+Goal identification runs every twenty seconds. Each request uses a bounded window of the most recent twelve observations that have already been sanitized and uploaded, rather than only the newest event batch. This preserves the existing privacy boundary while giving the interpreter enough sequence context to recognize a task across a document, browser, and development workspace.
+
+The observation ID history is bounded in memory by the existing queue limit and is cleared when the user starts a new Gap intent, so an older Gap cannot contribute context to a newer one. Candidate confidence samples used for corroboration are persisted locally; legacy sessions without samples restart their corroboration count rather than treating an unverifiable previous result as evidence.
+
+One inference at or above 0.8 still opens confirmation immediately. A candidate below that threshold is not acted on automatically; it is offered only after two matching inferences have an average confidence of at least 0.72, and the user must still explicitly confirm it. The main window shows the latest observed candidate and provides a user-initiated **Review & confirm** action, so low-confidence work is visible without a disruptive overlay.
+
+The native collector classifies code editors as `DEVELOPMENT` with a `CODE` resource kind. This is a classification improvement only: it does not collect screenshots, keystrokes, clipboard data, file contents, URLs, or any new metadata. Existing redaction and blocked-application rules still run before every upload. Failed inference attempts remain queued for retry and surface a temporary availability warning in the desktop.
+
+When the existing native observer records a `USER_IDLE` transition and later a `USER_ACTIVITY` transition, the Desktop shows a non-medical **Welcome back** notice. It says only that a possible interruption ended, keeps the current Goal candidate available for review, and never starts a Gap, confirms a Goal, or performs an external action automatically. This marker is derived from the existing local idle signal and does not collect health information or introduce a new upload field.
 
 The desktop process itself is excluded before observations enter the upload queue so opening Continuity cannot alter or reset inferred user intent.
 

@@ -158,6 +158,7 @@ fn event_type_from_name(value: &str) -> ActivityEventType {
 fn category_name(category: &ApplicationCategory) -> &'static str {
     match category {
         ApplicationCategory::Document => "DOCUMENT",
+        ApplicationCategory::Development => "DEVELOPMENT",
         ApplicationCategory::Browser => "BROWSER",
         ApplicationCategory::Communication => "COMMUNICATION",
         ApplicationCategory::Other => "OTHER",
@@ -167,6 +168,7 @@ fn category_name(category: &ApplicationCategory) -> &'static str {
 fn category_from_name(value: &str) -> ApplicationCategory {
     match value {
         "DOCUMENT" => ApplicationCategory::Document,
+        "DEVELOPMENT" => ApplicationCategory::Development,
         "BROWSER" => ApplicationCategory::Browser,
         "COMMUNICATION" => ApplicationCategory::Communication,
         _ => ApplicationCategory::Other,
@@ -176,6 +178,7 @@ fn category_from_name(value: &str) -> ApplicationCategory {
 fn resource_kind_name(kind: &ResourceKind) -> &'static str {
     match kind {
         ResourceKind::Document => "DOCUMENT",
+        ResourceKind::Code => "CODE",
         ResourceKind::WebPage => "WEB_PAGE",
         ResourceKind::Chat => "CHAT",
         ResourceKind::Other => "OTHER",
@@ -185,6 +188,7 @@ fn resource_kind_name(kind: &ResourceKind) -> &'static str {
 fn resource_kind_from_name(value: &str) -> ResourceKind {
     match value {
         "DOCUMENT" => ResourceKind::Document,
+        "CODE" => ResourceKind::Code,
         "WEB_PAGE" => ResourceKind::WebPage,
         "CHAT" => ResourceKind::Chat,
         _ => ResourceKind::Other,

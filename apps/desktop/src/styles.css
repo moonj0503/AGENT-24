@@ -204,6 +204,8 @@ html:has(.overlay-shell), body:has(.overlay-shell), body:has(.overlay-shell) #ro
 .preview-overlay .overlay-card { width: 100%; }
 .preview-hidden, .preview-loading { position: absolute; inset: 0; z-index: 1; display: grid; place-items: center; color: var(--color-text-muted); font-size: 14px; }
 .preview-note { max-width: 1180px; margin: 14px auto 0; color: var(--color-text-muted); font-size: 12px; }
+.candidate-preview { margin: 12px 0; padding: 12px; border: 1px solid var(--color-border); border-radius: 10px; background: var(--color-surface-subtle); }
+.candidate-preview p { margin: 4px 0; }
 
 @media (max-width: 760px) {
   .sidebar { width: 68px; padding: 20px 8px; }
