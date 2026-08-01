@@ -8,6 +8,8 @@ import type {
 
 export type ObservationSessionStatus = "STOPPED" | "RUNNING" | "PAUSED";
 export type StabilityDecision = "SHOW_CONFIRMATION" | "KEEP_OBSERVING";
+export const GOAL_CONFIRMATION_REQUESTED_EVENT = "continuity:goal-confirmation-requested";
+export const OBSERVATION_WORKFLOW_ERROR_EVENT = "continuity:observation-workflow-error";
 
 export interface ObservationSessionConfig {
   readonly observationIntervalMs: number;

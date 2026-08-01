@@ -262,6 +262,30 @@ describe("candidate stability and confirmation requests", () => {
     session.controller.stop();
   });
 
+  it("supplies the confirmed Goal ID and keeps a matching inference silent", async () => {
+    const confirmedGoal = GoalSchema.parse({
+      goalId: "confirmed-goal",
+      title: "Write the final report",
+      path: ["Project", "Report"],
+      status: "IN_PROGRESS",
+      source: "USER_CONFIRMED",
+      confidence: 1,
+    });
+    const session = setup({
+      confirmedGoal,
+      observations: [event("event-1", "Report"), null, null, null, null, event("event-2", "Notes")],
+      inferences: [inference("first"), inference("second")],
+    });
+    session.controller.start();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(session.infer.mock.calls.map((call) => call[2])).toEqual([
+      confirmedGoal.goalId,
+      confirmedGoal.goalId,
+    ]);
+    expect(session.confirmations).toEqual([]);
+    session.controller.stop();
+  });
+
   it("keeps observing for low confidence, snooze, cooldown, overlay blocking, or the confirmed Goal", () => {
     const candidate = inference().candidates[0]!;
     const signature = candidateSignature(candidate);
