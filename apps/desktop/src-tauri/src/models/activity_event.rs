@@ -78,3 +78,31 @@ pub struct Metadata {
     #[serde(rename = "idleSeconds")]
     pub idle_seconds: u64,
 }
+
+impl ActivityEvent {
+    pub fn from_snapshot(event_type: ActivityEventType, snapshot: SanitizedSnapshot) -> Self {
+        let resource_kind = match snapshot.category {
+            ApplicationCategory::Document => ResourceKind::Document,
+            ApplicationCategory::Browser => ResourceKind::WebPage,
+            ApplicationCategory::Communication => ResourceKind::Chat,
+            ApplicationCategory::Other => ResourceKind::Other,
+        };
+
+        Self {
+            event_id: uuid::Uuid::new_v4().to_string(),
+            event_type,
+            occurred_at: chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Millis, true),
+            application: Application {
+                name: snapshot.application_name,
+                category: snapshot.category,
+            },
+            resource: Some(Resource {
+                title: snapshot.window_title,
+                kind: resource_kind,
+            }),
+            metadata: Metadata {
+                idle_seconds: snapshot.idle_seconds,
+            },
+        }
+    }
+}
