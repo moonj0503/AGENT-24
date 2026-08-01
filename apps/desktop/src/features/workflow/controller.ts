@@ -18,7 +18,7 @@ export class DesktopWorkflowController {
   private starting?: Promise<void>;
   private ending?: Promise<RecoveryBrief>;
   constructor(workSessionId: string, confirmedGoal?: Goal, private readonly dependencies = defaults) {
-    setDesktopWorkflowState({ workSessionId, confirmedGoal, actionResults: [], phase: confirmedGoal ? "READY_FOR_GAP" : "OBSERVING", pending: false });
+    setDesktopWorkflowState({ workSessionId, confirmedGoal, actionResults: [], artifacts: [], phase: confirmedGoal ? "READY_FOR_GAP" : "OBSERVING", pending: false });
   }
   beginGapIntent(): void {
     const current = getDesktopWorkflowState();
@@ -26,7 +26,7 @@ export class DesktopWorkflowController {
       throw new Error("A Gap is already active.");
     }
     const { workSessionId } = current;
-    setDesktopWorkflowState({ workSessionId, actionResults: [], phase: "IDENTIFYING_GOAL", pending: false });
+    setDesktopWorkflowState({ workSessionId, actionResults: [], artifacts: [], phase: "IDENTIFYING_GOAL", pending: false });
   }
   cancelGapIntent(): void {
     const current = getDesktopWorkflowState();
@@ -37,10 +37,10 @@ export class DesktopWorkflowController {
   setConfirmedGoal(goal: Goal): void { patchDesktopWorkflowState({ confirmedGoal: goal, phase: "READY_FOR_GAP", error: undefined }); }
   clear(): void {
     const { workSessionId } = getDesktopWorkflowState();
-    setDesktopWorkflowState({ workSessionId, actionResults: [], phase: "OBSERVING", pending: false });
+    setDesktopWorkflowState({ workSessionId, actionResults: [], artifacts: [], phase: "OBSERVING", pending: false });
   }
   restore(workSessionId: string, goal?: Goal): void {
-    setDesktopWorkflowState({ workSessionId, confirmedGoal: goal, actionResults: [], phase: goal ? "READY_FOR_GAP" : "OBSERVING", pending: false });
+    setDesktopWorkflowState({ workSessionId, confirmedGoal: goal, actionResults: [], artifacts: [], phase: goal ? "READY_FOR_GAP" : "OBSERVING", pending: false });
   }
   startGap(inference?: GoalInferenceResult): Promise<void> {
     this.starting ??= this.startGapOnce(inference).finally(() => { this.starting = undefined; });
@@ -58,7 +58,7 @@ export class DesktopWorkflowController {
       patchDesktopWorkflowState({ gapSession });
       const runtime = await this.dependencies.runGap(gapSession);
       const awaitingApproval = runtime.actionPlan.actions.some((action) => action.status === "WAITING_APPROVAL");
-      patchDesktopWorkflowState({ actionPlan: runtime.actionPlan, actionResults: runtime.actionResults, recoveryBrief: runtime.recoveryBrief, phase: awaitingApproval ? "AWAITING_APPROVAL" : "GAP_ACTIVE", pending: false });
+      patchDesktopWorkflowState({ actionPlan: runtime.actionPlan, actionResults: runtime.actionResults, artifacts: runtime.artifacts, recoveryBrief: runtime.recoveryBrief, phase: awaitingApproval ? "AWAITING_APPROVAL" : "GAP_ACTIVE", pending: false });
     } catch {
       patchDesktopWorkflowState({ phase: "FAILED", pending: false, error: "Gap Mode could not start. Your confirmed Goal and completed setup were preserved." });
       throw new Error("Gap Mode could not start.");

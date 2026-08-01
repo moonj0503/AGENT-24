@@ -1,7 +1,9 @@
 import type {
+  Artifact,
   GapHistoryDetail,
   GapHistoryListResponse,
   GapHistoryQuery,
+  UpdateArtifactRequest,
 } from "@continuity/contracts";
 import { ApiHttpError } from "../plugins/error-handler.js";
 import type { WorkflowRepository } from "../repositories/workflow-repository.js";
@@ -26,11 +28,12 @@ export class GapHistoryService {
     try {
       const gapSession = await this.repository.getGapSession(gapId);
       if (!gapSession) throw new ApiHttpError("NOT_FOUND", "The GapSession was not found.");
-      const [goal, checkpoint, recoveryBrief, actions] = await Promise.all([
+      const [goal, checkpoint, recoveryBrief, actions, artifacts] = await Promise.all([
         this.repository.getGoal(gapSession.goalId),
         this.repository.getCheckpoint(gapSession.checkpointId),
         this.repository.getRecoveryBrief(gapId),
         this.repository.listGapActions(gapId),
+        this.repository.listArtifacts(gapId),
       ]);
       if (!goal) throw new ApiHttpError("NOT_FOUND", "The confirmed Goal was not found.");
       if (!checkpoint) throw new ApiHttpError("NOT_FOUND", "The Checkpoint was not found.");
@@ -40,6 +43,7 @@ export class GapHistoryService {
         checkpoint,
         ...(recoveryBrief ? { recoveryBrief } : {}),
         actions: [...actions],
+        artifacts: [...artifacts],
       };
     } catch (cause) {
       if (cause instanceof ApiHttpError) throw cause;
@@ -66,6 +70,39 @@ export class GapHistoryService {
     } catch (cause) {
       if (cause instanceof ApiHttpError) throw cause;
       throw new ApiHttpError("DATABASE_FAILURE", "Gap actions could not be loaded.", { cause });
+    }
+  }
+
+  async listArtifacts(gapId: string) {
+    try {
+      const gapSession = await this.repository.getGapSession(gapId);
+      if (!gapSession) throw new ApiHttpError("NOT_FOUND", "The GapSession was not found.");
+      return { artifacts: await this.repository.listArtifacts(gapId) };
+    } catch (cause) {
+      if (cause instanceof ApiHttpError) throw cause;
+      throw new ApiHttpError("DATABASE_FAILURE", "Artifacts could not be loaded.", { cause });
+    }
+  }
+
+  async getArtifact(artifactId: string): Promise<Artifact> {
+    try {
+      const artifact = await this.repository.getArtifact(artifactId);
+      if (!artifact) throw new ApiHttpError("NOT_FOUND", "The Artifact was not found.");
+      return artifact;
+    } catch (cause) {
+      if (cause instanceof ApiHttpError) throw cause;
+      throw new ApiHttpError("DATABASE_FAILURE", "The Artifact could not be loaded.", { cause });
+    }
+  }
+
+  async updateArtifact(artifactId: string, request: UpdateArtifactRequest): Promise<Artifact> {
+    const artifact = await this.getArtifact(artifactId);
+    const updated = { ...artifact, ...request, updatedAt: new Date().toISOString() };
+    try {
+      await this.repository.updateArtifact(updated);
+      return updated;
+    } catch (cause) {
+      throw new ApiHttpError("DATABASE_FAILURE", "The Artifact could not be updated.", { cause });
     }
   }
 }

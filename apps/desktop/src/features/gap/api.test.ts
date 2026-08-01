@@ -14,7 +14,7 @@ it("propagates backend IDs and uses contract approval decisions with idempotent 
   const brief = { briefId: "brief-backend", gapId: gap.gapId, goalBeforeGap: "Project / Integrate", completedActions: [], pendingActions: [], externalEffects: [], recommendedNextAction: { title: "Resume", estimatedMinutes: 5 }, createdAt: "2026-08-02T00:02:00.000Z" };
   const fetchMock = vi.fn()
     .mockResolvedValueOnce(json(checkpoint)).mockResolvedValueOnce(json(gap))
-    .mockResolvedValueOnce(json({ actionPlan: plan, actionResults: [], recoveryBrief: brief }))
+    .mockResolvedValueOnce(json({ actionPlan: plan, actionResults: [], recoveryBrief: brief, artifacts: [] }))
     .mockResolvedValueOnce(json(action)).mockResolvedValueOnce(json({ ...gap, status: "COMPLETED", endedAt: "2026-08-02T00:03:00.000Z" }));
   vi.stubGlobal("fetch", fetchMock);
   const returnedCheckpoint = await createCheckpoint(goal);

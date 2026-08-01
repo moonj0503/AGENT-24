@@ -1,6 +1,7 @@
 import {
   type ActionPlan,
   type ActionResult,
+  type Artifact,
   ObservationIngestionResultSchema,
   type ActivityEvent,
   type Checkpoint,
@@ -23,6 +24,7 @@ export class InMemoryWorkflowRepository implements WorkflowRepository {
   private readonly decisionsByGap = new Map<string, Map<string, { decision: "APPROVE" | "REJECT"; reason?: string }>>();
   private readonly recoveryBriefs = new Map<string, RecoveryBrief>();
   private readonly actionResultsByGap = new Map<string, Map<string, ActionResult>>();
+  private readonly artifacts = new Map<string, Artifact>();
 
   constructor(initial: {
     readonly goals?: readonly Goal[];
@@ -120,6 +122,24 @@ export class InMemoryWorkflowRepository implements WorkflowRepository {
     const results = this.actionResultsByGap.get(gapId) ?? new Map<string, ActionResult>();
     results.set(result.actionId, result);
     this.actionResultsByGap.set(gapId, results);
+  }
+
+  async saveArtifacts(artifacts: readonly Artifact[]): Promise<void> {
+    for (const artifact of artifacts) this.artifacts.set(artifact.artifactId, artifact);
+  }
+
+  async getArtifact(artifactId: string): Promise<Artifact | null> {
+    return this.artifacts.get(artifactId) ?? null;
+  }
+
+  async listArtifacts(gapId: string): Promise<readonly Artifact[]> {
+    return [...this.artifacts.values()]
+      .filter((artifact) => artifact.gapId === gapId)
+      .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
+  }
+
+  async updateArtifact(artifact: Artifact): Promise<void> {
+    this.artifacts.set(artifact.artifactId, artifact);
   }
 
   async listGapActions(gapId: string): Promise<readonly StoredGapAction[]> {
