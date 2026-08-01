@@ -269,6 +269,10 @@ describe("application-level runtime composition", () => {
       const format = (openAIRequest as { text?: { format?: { name?: string } } }).text?.format?.name;
       if (format === "continuity_action_plan") return { output_parsed: actionPlan };
       if (format === "recovery_brief") return { output_parsed: recoveryBrief };
+      if (format === "artifact_set") return { output_parsed: { artifacts: [
+        { actionId: "action-safe", content: "- [ ] Draft the next writing step" },
+        { actionId: "action-email", content: "Subject: Team update\n\nDraft update." },
+      ] } };
       throw new Error(`Unexpected structured response: ${format}`);
     });
     const client = { responses: { parse } } as unknown as OpenAIClient;
@@ -298,6 +302,7 @@ describe("application-level runtime composition", () => {
     expect(createClient).toHaveBeenCalledOnce();
     expect(parse.mock.calls.map(([call]) => (call as { model?: string }).model)).toEqual([
       "continuity-runtime-model",
+      "recovery-runtime-model",
       "recovery-runtime-model",
     ]);
     expect(goalInterpreter).not.toHaveBeenCalled();

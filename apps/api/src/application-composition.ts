@@ -59,6 +59,7 @@ export function createApplicationDependencies(
       agentBundle.runtime,
       options.clock,
       eventBus,
+      agentBundle.artifactGenerator,
     ),
     gapLifecycleService: createGapLifecycleService(options.workflowRepository, eventBus, options.clock),
     gapHistoryService: createGapHistoryService(options.workflowRepository),

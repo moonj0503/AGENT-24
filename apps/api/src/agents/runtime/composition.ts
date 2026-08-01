@@ -17,6 +17,11 @@ import {
   FixtureRecoveryGenerator,
   createOpenAIRecoveryGenerator,
 } from "../recovery-generator/index.js";
+import {
+  FixtureArtifactGenerator,
+  createOpenAIArtifactGenerator,
+  type ArtifactGenerator,
+} from "../artifact-generator/index.js";
 import { DeterministicPolicyEngine } from "../../policy/index.js";
 import { ToolExecutor } from "../../tools/index.js";
 import { FixtureRuntimeOrchestrator } from "./orchestrator.js";
@@ -28,6 +33,7 @@ export interface AgentRuntimeBundle {
   readonly provider: AgentProviderMode;
   readonly goalInterpreter: GoalInterpreter;
   readonly runtime: RuntimeOrchestrator;
+  readonly artifactGenerator: ArtifactGenerator;
 }
 
 export interface AgentCompositionDependencies {
@@ -55,6 +61,7 @@ function createFixtureBundle(): AgentRuntimeBundle {
   return {
     provider: "fixture",
     goalInterpreter: new FixtureGoalInterpreter(),
+    artifactGenerator: new FixtureArtifactGenerator(),
     runtime: new FixtureRuntimeOrchestrator(
       new FixtureContinuityAgent(),
       new DeterministicPolicyEngine(),
@@ -75,10 +82,12 @@ function createOpenAIBundle(
   const goalInterpreter = createOpenAIGoalInterpreter(config, client);
   const continuityAgent = createOpenAIContinuityAgent(config, client);
   const recoveryGenerator = createOpenAIRecoveryGenerator(config, client);
+  const artifactGenerator = createOpenAIArtifactGenerator(config, client);
 
   return {
     provider: "openai",
     goalInterpreter,
+    artifactGenerator,
     runtime: new FixtureRuntimeOrchestrator(
       continuityAgent,
       new DeterministicPolicyEngine(),

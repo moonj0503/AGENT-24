@@ -136,6 +136,11 @@ function fakeOpenAIClient() {
         return { output_parsed: actionPlan };
       case "recovery_brief":
         return { output_parsed: recoveryBrief };
+      case "artifact_set":
+        return { output_parsed: { artifacts: [
+          { actionId: "action-safe", content: "- [ ] Draft the next writing step" },
+          { actionId: "action-email", content: "Subject: Team update\n\nDraft update." },
+        ] } };
       default:
         throw new Error("Unexpected structured output request.");
     }
@@ -254,11 +259,14 @@ describe("OpenAI runtime composition", () => {
     await bundle.goalInterpreter.run({ workSessionId: "session-001", events: [] });
     const runtimeResult = await bundle.runtime.run(runtimeInput);
 
-    expect(parse).toHaveBeenCalledTimes(3);
+    await bundle.artifactGenerator.run({ ...runtimeInput, actionPlan: runtimeResult.actionPlan, actionResults: runtimeResult.actionResults });
+
+    expect(parse).toHaveBeenCalledTimes(4);
     const requests = parse.mock.calls.map(([request]) => request as { model?: string });
     expect(requests.map(({ model }) => model)).toEqual([
       openAIConfig.goalModel,
       openAIConfig.continuityModel,
+      openAIConfig.recoveryModel,
       openAIConfig.recoveryModel,
     ]);
     expect(environment).toEqual(snapshot);
@@ -292,11 +300,13 @@ describe("OpenAI runtime composition", () => {
       },
     );
 
-    await bundle.runtime.run(runtimeInput);
+    const result = await bundle.runtime.run(runtimeInput);
+    await bundle.artifactGenerator.run({ ...runtimeInput, actionPlan: result.actionPlan, actionResults: result.actionResults });
 
     expect(parse.mock.calls.map(([request]) => structuredName(request))).toEqual([
       "continuity_action_plan",
       "recovery_brief",
+      "artifact_set",
     ]);
   });
 

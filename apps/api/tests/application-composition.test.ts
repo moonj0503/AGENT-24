@@ -15,6 +15,7 @@ import {
   createAgentRuntimeBundle,
   type AgentRuntimeBundle,
 } from "../src/agents/runtime/index.js";
+import { FixtureArtifactGenerator } from "../src/agents/artifact-generator/index.js";
 import {
   OpenAIClientInitializationError,
   type OpenAIClient,
@@ -141,6 +142,7 @@ describe("application dependency composition", () => {
       provider: "openai",
       goalInterpreter: { run: runGoal },
       runtime: { run: runRuntime },
+      artifactGenerator: new FixtureArtifactGenerator(),
     };
     const repository = new InMemoryWorkflowRepository();
     await repository.ingestObservations(observationPayload);

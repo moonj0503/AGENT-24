@@ -12,7 +12,7 @@ import {
 import type { AgentEventPublisher } from "../features/workflow/event-bus.js";
 import { ApiHttpError } from "../plugins/error-handler.js";
 import type { WorkflowRepository } from "../repositories/workflow-repository.js";
-import { createActionArtifacts } from "../tools/index.js";
+import { FixtureArtifactGenerator, type ArtifactGenerator } from "../agents/artifact-generator/index.js";
 
 export interface Clock {
   now(): string;
@@ -28,6 +28,7 @@ export class GapRecoveryService {
     private readonly runtime: RuntimeOrchestrator,
     private readonly clock: Clock = systemClock,
     private readonly events?: AgentEventPublisher,
+    private readonly artifactGenerator: ArtifactGenerator = new FixtureArtifactGenerator(),
   ) {}
 
   async run(
@@ -61,7 +62,18 @@ export class GapRecoveryService {
       throw new ApiHttpError("AGENT_FAILURE", "The recovery runtime could not complete.", { cause });
     }
 
-    const artifacts = createActionArtifacts(gapSession.gapId, result.actionPlan, result.actionResults);
+    let artifacts;
+    try {
+      artifacts = await this.artifactGenerator.run({
+        goal,
+        checkpoint,
+        gapSession,
+        actionPlan: result.actionPlan,
+        actionResults: result.actionResults,
+      });
+    } catch (cause) {
+      throw new ApiHttpError("AGENT_FAILURE", "The recovery artifacts could not be generated.", { cause });
+    }
     try {
       await this.repository.saveActionPlan(result.actionPlan);
       await Promise.all(result.actionResults.map((actionResult) =>
@@ -82,7 +94,7 @@ export class GapRecoveryService {
       actionPlan: result.actionPlan,
       actionResults: [...result.actionResults],
       recoveryBrief: result.recoveryBrief,
-      artifacts,
+      artifacts: [...artifacts],
     };
   }
 
@@ -109,6 +121,7 @@ export function createGapRecoveryService(
   runtime: RuntimeOrchestrator,
   clock: Clock = systemClock,
   events?: AgentEventPublisher,
+  artifactGenerator: ArtifactGenerator = new FixtureArtifactGenerator(),
 ): GapRecoveryService {
-  return new GapRecoveryService(repository, runtime, clock, events);
+  return new GapRecoveryService(repository, runtime, clock, events, artifactGenerator);
 }
