@@ -12,6 +12,8 @@ pub fn run() {
             std::fs::create_dir_all(&directory)?;
             let repository = storage::ActivityRepository::open(directory.join("continuity-activity.db"))?;
             app.manage(commands::activity::ObserverState::new(repository));
+            app.manage(commands::screenshot::ScreenshotState::new(directory.join("screenshots")));
+            app.manage(commands::files::FileToolState::new(directory.join("exports")));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -22,6 +24,8 @@ pub fn run() {
             commands::activity::save_observation_state,
             commands::activity::clear_observation_state,
             commands::activity::set_user_blocked_applications,
+            commands::screenshot::capture_observation_screenshot,
+            commands::files::write_text_file,
             commands::overlay::show_overlay,
             commands::overlay::hide_overlay,
             commands::overlay::position_overlay,
