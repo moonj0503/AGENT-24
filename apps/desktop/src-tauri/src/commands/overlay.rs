@@ -60,7 +60,7 @@ pub fn open_main_window(screen: String, app: AppHandle) -> Result<(), String> {
     let main = app.get_webview_window(MAIN_LABEL).ok_or_else(|| "main window is unavailable".to_owned())?;
     main.show().map_err(|error| error.to_string())?;
     main.set_focus().map_err(|error| error.to_string())?;
-    main.emit("main.navigate", screen).map_err(|error| error.to_string())
+    main.emit("main:navigate", screen).map_err(|error| error.to_string())
 }
 
 fn overlay_window(app: &AppHandle) -> Result<tauri::WebviewWindow, String> {

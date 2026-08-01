@@ -1,0 +1,10 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Allow the desktop windows to communicate through Tauri events.",
+  "windows": ["main", "quick-overlay"],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-emit"
+  ]
+}
