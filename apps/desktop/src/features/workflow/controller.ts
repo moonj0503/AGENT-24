@@ -2,6 +2,7 @@ import type { Goal, GoalInferenceResult, RecoveryBrief } from "@continuity/contr
 import { createCheckpoint, createGapSession, decideGapAction, endGapSession, fetchGapActions, runGap } from "../gap/api";
 import { fetchRecoveryBrief } from "../recovery/api";
 import { getDesktopWorkflowState, patchDesktopWorkflowState, setDesktopWorkflowState } from "./store";
+import { applyApprovedTextPatch, listApprovedTextFiles, readApprovedTextFile, revokeTextFileAuthorization } from "../permissions/approved-files";
 
 export interface DesktopWorkflowControllerDependencies {
   readonly createCheckpoint: typeof createCheckpoint;
@@ -56,22 +57,33 @@ export class DesktopWorkflowController {
       patchDesktopWorkflowState({ checkpoint });
       const gapSession = current.gapSession ?? await this.dependencies.createGapSession(current.workSessionId, goal.goalId, checkpoint.checkpointId);
       patchDesktopWorkflowState({ gapSession });
-      const runtime = await this.dependencies.runGap(gapSession);
+      const approvals = await listApprovedTextFiles();
+      const approved = approvals.find((item) => item.scope === "GAP") ?? approvals.find((item) => item.scope === "ALWAYS");
+      const fileContext = approved ? await readApprovedTextFile(approved.authorizationId) : undefined;
+      const runtime = fileContext ? await this.dependencies.runGap(gapSession, fileContext) : await this.dependencies.runGap(gapSession);
       const awaitingApproval = runtime.actionPlan.actions.some((action) => action.status === "WAITING_APPROVAL");
       patchDesktopWorkflowState({ actionPlan: runtime.actionPlan, actionResults: runtime.actionResults, artifacts: runtime.artifacts, recoveryBrief: runtime.recoveryBrief, phase: awaitingApproval ? "AWAITING_APPROVAL" : "GAP_ACTIVE", pending: false });
+      for (const action of runtime.actionPlan.actions) {
+        if (action.type === "EDIT_APPROVED_TEXT_FILE" && action.status === "WAITING_APPROVAL" && action.textEdit && approved?.authorizationId === action.textEdit.authorizationId) {
+          const executionResult = await applyApprovedTextPatch(action.actionId, action.textEdit.authorizationId, action.textEdit.find, action.textEdit.replace);
+          await this.decideAction(action.actionId, "APPROVE", executionResult);
+        }
+      }
+      if (approved?.scope === "GAP") await revokeTextFileAuthorization(approved.authorizationId);
     } catch {
       patchDesktopWorkflowState({ phase: "FAILED", pending: false, error: "Gap Mode could not start. Your confirmed Goal and completed setup were preserved." });
       throw new Error("Gap Mode could not start.");
     }
   }
-  async decideAction(actionId: string, decision: "APPROVE" | "REJECT"): Promise<void> {
+  async decideAction(actionId: string, decision: "APPROVE" | "REJECT", executionResult?: import("@continuity/contracts").ActionResult): Promise<void> {
     const state = getDesktopWorkflowState();
     if (!state.gapSession || !state.actionPlan) throw new Error("The active Gap action is no longer available.");
-    const action = await this.dependencies.decideGapAction(state.gapSession.gapId, actionId, decision, decision === "REJECT" ? "The user rejected this action." : undefined);
+    const action = await this.dependencies.decideGapAction(state.gapSession.gapId, actionId, decision, decision === "REJECT" ? "The user rejected this action." : undefined, executionResult);
     const history = await this.dependencies.fetchGapActions(state.gapSession.gapId);
     const actions = state.actionPlan.actions.map((item) => item.actionId === action.actionId ? action : item);
     const results = history.actions.flatMap((item) => item.result ? [item.result] : []);
-    patchDesktopWorkflowState({ actionPlan: { ...state.actionPlan, actions }, actionResults: results, phase: actions.some((item) => item.status === "WAITING_APPROVAL") ? "AWAITING_APPROVAL" : "GAP_ACTIVE" });
+    const recoveryBrief = executionResult ? await this.dependencies.fetchRecoveryBrief(state.gapSession.gapId) : state.recoveryBrief;
+    patchDesktopWorkflowState({ actionPlan: { ...state.actionPlan, actions }, actionResults: results, recoveryBrief, phase: actions.some((item) => item.status === "WAITING_APPROVAL") ? "AWAITING_APPROVAL" : "GAP_ACTIVE" });
   }
   endGap(): Promise<RecoveryBrief> {
     this.ending ??= this.endGapOnce().finally(() => { this.ending = undefined; });

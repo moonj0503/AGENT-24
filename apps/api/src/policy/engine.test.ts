@@ -82,6 +82,7 @@ describe("DeterministicPolicyEngine", () => {
       "CREATE_MESSAGE_DRAFT",
       "ORGANIZE_REFERENCES",
       "GENERATE_RECOVERY_BRIEF",
+      "EDIT_APPROVED_TEXT_FILE",
       "SEND_EMAIL",
     ];
 

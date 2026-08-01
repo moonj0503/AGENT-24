@@ -6,3 +6,7 @@ export async function collectSanitizedActivity(): Promise<ActivityEvent | null> 
   if (value === undefined || value === null) return null;
   return ActivityEventSchema.parse(value);
 }
+
+export async function captureObservationScreenshot(workSessionId: string): Promise<void> {
+  await invokeNative("capture_observation_screenshot", { workSessionId });
+}

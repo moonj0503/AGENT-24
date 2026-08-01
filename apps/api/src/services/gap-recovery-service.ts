@@ -50,6 +50,7 @@ export class GapRecoveryService {
         checkpoint,
         gapSession,
         occurredAt: this.clock.now(),
+        approvedTextFile: request.approvedTextFile,
       });
     } catch (cause) {
       if (cause instanceof RuntimeContextValidationError) {

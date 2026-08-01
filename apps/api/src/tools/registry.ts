@@ -5,6 +5,7 @@ import { createMessageDraftTool } from "./create-message-draft.js";
 import { organizeReferencesTool } from "./organize-references.js";
 import { generateRecoveryBriefTool } from "./generate-recovery-brief.js";
 import { sendEmailTool } from "./send-email.js";
+import { editApprovedTextFileTool } from "./edit-approved-text-file.js";
 
 export class DuplicateToolRegistrationError extends Error {
   constructor(type: AgentTool["type"]) {
@@ -44,5 +45,6 @@ export const defaultTools = [
   createMessageDraftTool,
   organizeReferencesTool,
   generateRecoveryBriefTool,
+  editApprovedTextFileTool,
   sendEmailTool,
 ] as const satisfies readonly AgentTool[];

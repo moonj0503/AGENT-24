@@ -17,6 +17,7 @@ import type {
 
 const config: ObservationSessionConfig = {
   observationIntervalMs: 10,
+  screenshotIntervalMs: 20,
   uploadIntervalMs: 30,
   inferenceIntervalMs: 50,
   confidenceThreshold: 0.8,
@@ -85,8 +86,10 @@ function setup(options: {
   const confirmations: GoalConfirmationRequested[] = [];
   const interruptions: Array<{ durationMs: number }> = [];
   const warnings: string[] = [];
+  const captureScreenshot = vi.fn(async () => undefined);
   const dependencies: ObservationSessionDependencies = {
     collectActivity,
+    captureScreenshot,
     upload,
     infer,
     getConfirmedGoal: () => options.confirmedGoal,
@@ -99,6 +102,7 @@ function setup(options: {
   return {
     controller: new ObservationSessionController("work-session", dependencies, config, options.initial, options.queueLimits),
     collectActivity,
+    captureScreenshot,
     upload,
     infer,
     confirmations,
@@ -120,8 +124,21 @@ afterEach(() => {
 describe("ObservationSessionController lifecycle and scheduling", () => {
   it("checks every twenty seconds and accepts one high-confidence result by default", () => {
     expect(DEFAULT_OBSERVATION_SESSION_CONFIG.inferenceIntervalMs).toBe(20_000);
+    expect(DEFAULT_OBSERVATION_SESSION_CONFIG.screenshotIntervalMs).toBe(20_000);
     expect(DEFAULT_OBSERVATION_SESSION_CONFIG.stableInferenceCount).toBe(1);
     expect(DEFAULT_OBSERVATION_SESSION_CONFIG.inferenceContextEventLimit).toBe(12);
+  });
+
+  it("captures at Gap observation start and then every configured screenshot interval", async () => {
+    const session = setup();
+    session.controller.beginGapObservation();
+    await Promise.resolve();
+    expect(session.captureScreenshot).toHaveBeenCalledOnce();
+    session.controller.start();
+    await vi.advanceTimersByTimeAsync(19);
+    expect(session.captureScreenshot).toHaveBeenCalledOnce();
+    await vi.advanceTimersByTimeAsync(1);
+    expect(session.captureScreenshot).toHaveBeenCalledTimes(2);
   });
 
   it("starts, stops, and does not duplicate timers on repeated start", async () => {

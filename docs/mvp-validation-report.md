@@ -50,3 +50,12 @@ The current deterministic policy produces only `AUTO_EXECUTE` or `DOWNGRADE` dec
 ## MVP disposition
 
 Functionally ready for a controlled MVP demo using the fixture agent provider. Release freeze remains conditional on the final interactive Gap/Recovery UI click-through, credential sanitation/rotation, and a decision on whether installer packaging and actual lint coverage are required for the MVP distribution.
+# Approved file editing
+
+1. Save a UTF-8 `.txt` or `.md` file smaller than 1 MB and keep its original contents.
+2. Open **Permissions**, choose **Allow a file…**, paste its full path, and select **Allow for this Gap**.
+3. Start and confirm a Gap whose Goal clearly calls for updating that text. Verify the popup displayed the exact path and the action never targets another file.
+4. After the runtime completes, verify one exact replacement was applied, a backup exists at the Recovery path, and Recovery shows Before/After.
+5. Verify the one-Gap permission disappeared. Repeat with **Always allow**, verify it remains, then revoke it from Permissions.
+6. Move or replace an approved file and verify the next read/edit fails closed and asks for authorization again.
+7. Verify unsaved Notepad tabs, non-UTF-8 files, non-`.txt`/`.md` files, files over 1 MB, ambiguous search text, and patches over 64 KB are rejected.

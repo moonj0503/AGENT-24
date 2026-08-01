@@ -1,6 +1,6 @@
 import { GOAL_CONFIRMATION_REQUESTED_EVENT, GOAL_INFERENCE_UPDATED_EVENT, INTERRUPTION_RESUMED_EVENT, OBSERVATION_WORKFLOW_ERROR_EVENT, type GoalConfirmationRequested, type GoalInferenceUpdated, type InterruptionResumed } from "./types";
 import { requestGoalInference, uploadObservations } from "./api";
-import { collectSanitizedActivity } from "./native";
+import { captureObservationScreenshot, collectSanitizedActivity } from "./native";
 import { ObservationSessionController } from "./observation-session-controller";
 import { getOverlaySnapshot } from "../../overlay/overlay-store";
 import { clearConfirmedGoal, getConfirmedGoalSnapshot, setConfirmedGoal } from "../goals/confirmed-goal-store";
@@ -56,6 +56,7 @@ async function initialize(options: { persistence?: ObservationPersistence; now?:
   let bridge: GoalConfirmationBridge;
   const session = new ObservationSessionController(state.workSessionId, {
     collectActivity: collectSanitizedActivity,
+    captureScreenshot: () => captureObservationScreenshot(state.workSessionId),
     upload: uploadObservations,
     infer: requestGoalInference,
     getConfirmedGoal: () => getConfirmedGoalSnapshot().confirmedGoal,

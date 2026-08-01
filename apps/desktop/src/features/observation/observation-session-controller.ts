@@ -13,6 +13,7 @@ import { ExponentialBackoff } from "./backoff";
 
 export const DEFAULT_OBSERVATION_SESSION_CONFIG: ObservationSessionConfig = Object.freeze({
   observationIntervalMs: 3_000,
+  screenshotIntervalMs: 20_000,
   uploadIntervalMs: 30_000,
   inferenceIntervalMs: 20_000,
   confidenceThreshold: 0.8,
@@ -35,9 +36,11 @@ export class ObservationSessionController {
   private status: ObservationSessionStatus = "STOPPED";
   private generation = 0;
   private observationTimer?: ReturnType<typeof setInterval>;
+  private screenshotTimer?: ReturnType<typeof setInterval>;
   private uploadTimer?: ReturnType<typeof setInterval>;
   private inferenceTimer?: ReturnType<typeof setInterval>;
   private observing = false;
+  private capturingScreenshot = false;
   private uploading = false;
   private inferring = false;
   private lastObservationSignature?: string;
@@ -161,6 +164,7 @@ export class ObservationSessionController {
     this.lastPopupAt = undefined;
     this.snoozed = false;
     this.lastObservationSignature = undefined;
+    void this.captureScreenshot();
     this.dependencies.onStateChanged?.(true);
   }
 
@@ -204,6 +208,10 @@ export class ObservationSessionController {
       () => { void this.observeCycle(); },
       this.config.observationIntervalMs,
     );
+    this.screenshotTimer = setInterval(
+      () => { void this.captureScreenshot(); },
+      this.config.screenshotIntervalMs,
+    );
     this.uploadTimer = setInterval(
       () => { void this.uploadCycle(); },
       this.config.uploadIntervalMs,
@@ -216,11 +224,25 @@ export class ObservationSessionController {
 
   private clearTimers(): void {
     if (this.observationTimer !== undefined) clearInterval(this.observationTimer);
+    if (this.screenshotTimer !== undefined) clearInterval(this.screenshotTimer);
     if (this.uploadTimer !== undefined) clearInterval(this.uploadTimer);
     if (this.inferenceTimer !== undefined) clearInterval(this.inferenceTimer);
     this.observationTimer = undefined;
+    this.screenshotTimer = undefined;
     this.uploadTimer = undefined;
     this.inferenceTimer = undefined;
+  }
+
+  private async captureScreenshot(): Promise<void> {
+    if (this.capturingScreenshot) return;
+    this.capturingScreenshot = true;
+    try {
+      await this.dependencies.captureScreenshot?.();
+    } catch {
+      this.dependencies.onWarning?.("A local observation screenshot could not be captured.");
+    } finally {
+      this.capturingScreenshot = false;
+    }
   }
 
   private async observeCycle(): Promise<void> {
