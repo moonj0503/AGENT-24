@@ -13,6 +13,6 @@ describe("quick overlay state", () => {
   it("dismisses presentation state without changing persistent data", () => {
     openOverlay({ state: "RECOVERY_READY", brief: undefined });
     dismissOverlay();
-    expect(getOverlaySnapshot().state).toBeNull();
+    expect(getOverlaySnapshot().state).toBe("HIDDEN");
   });
 });

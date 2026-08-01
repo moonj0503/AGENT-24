@@ -18,6 +18,11 @@ const gapData: GapData = {
   },
 };
 
+/** Read-only fixture access for the development preview; it never starts a gap. */
+export function getGapPreviewData(): GapData {
+  return structuredClone(gapData);
+}
+
 export async function startGap(): Promise<GapData> {
   return structuredClone(gapData);
 }
