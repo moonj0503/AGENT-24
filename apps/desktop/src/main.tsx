@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { OverlayApp } from "./overlay/OverlayApp";
+import { RawApiStreamWindow } from "./features/chat/RawApiStreamWindow";
 import { getWindowLabel } from "./lib/tauri";
 import { isOverlayPreviewRoute } from "./overlay-preview-route";
 import "./styles.css";
@@ -13,6 +14,10 @@ const root = document.getElementById("root");
 if (root) void getWindowLabel().then(async (label) => {
   if (label === "quick-overlay") {
     createRoot(root).render(<StrictMode><OverlayApp /></StrictMode>);
+    return;
+  }
+  if (label === "raw-api-stream") {
+    createRoot(root).render(<StrictMode><RawApiStreamWindow /></StrictMode>);
     return;
   }
   if (isOverlayPreviewRoute(window.location.pathname, import.meta.env?.DEV === true)) {
