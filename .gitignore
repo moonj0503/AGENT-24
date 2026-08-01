@@ -9,3 +9,4 @@ target/
 src-tauri/target/
 *.db
 *.db-*
+.worktrees/
