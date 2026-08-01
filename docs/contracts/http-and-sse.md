@@ -55,6 +55,20 @@ missing key                    → IDEMPOTENCY_KEY_REQUIRED
 
 Policy decisions such as `DENY` or `DOWNGRADE` are normally represented in the action result and audit log, not as a transport-level API error. The API should use an error response only when the request itself cannot be processed.
 
+### Idempotency implementation
+
+`apps/api/src/plugins/idempotency.ts` enforces this behavior for all state-changing API routes (`POST`, `PUT`, `PATCH`, and `DELETE`). It fingerprints the HTTP method, URL, and body for each `Idempotency-Key`.
+
+| Situation | Result |
+|---|---|
+| Header missing or empty | `400 IDEMPOTENCY_KEY_REQUIRED` |
+| First request with a new key | Route executes and its response is recorded |
+| Same key and same fingerprint after completion | Original status and payload are replayed with `Idempotency-Replayed: true` |
+| Same key and same fingerprint while running | The duplicate request waits for and receives the original response |
+| Same key and different fingerprint | `409 IDEMPOTENCY_KEY_REUSED` |
+
+The current store is intentionally in-memory for the mock-first MVP. It resets when the API process restarts and has no expiry policy yet; a database-backed store with a TTL is required before multi-instance or production use.
+
 ## Implementation status
 
 The common error contract is implemented and connected to the Fastify application.
@@ -67,18 +81,40 @@ The common error contract is implemented and connected to the Fastify applicatio
 | Fastify error conversion | Complete | `apps/api/src/plugins/error-handler.ts` |
 | Global application registration | Complete | `apps/api/src/app.ts` |
 | Error integration tests | Added | `apps/api/tests/error-handler.test.ts` |
+| Idempotency pre-handler | Complete (in-memory MVP) | `apps/api/src/plugins/idempotency.ts` |
+| First API vertical slice | Complete (in-memory MVP) | `apps/api/src/features/workflow/` |
 
 The Fastify handler currently converts validation errors, typed `ApiHttpError` failures, unknown routes, conflicts, and unexpected exceptions. Unexpected exceptions return a generic `INTERNAL_ERROR` message so internal details are not exposed.
 
+## Implemented API flow
+
+The first end-to-end API flow is available with the existing frozen Goal Interpreter fixture.
+
+```text
+POST /observations
+  → save sanitized ActivityEvent objects by work session
+POST /goal-inferences
+  → load the requested events and run FixtureGoalInterpreter
+POST /goals/confirm
+  → store a confirmed candidate or a manually entered goal
+```
+
+| Endpoint | Success status | Response |
+|---|---:|---|
+| `POST /observations` | 201 | `ObservationIngestionResult` |
+| `POST /goal-inferences` | 200 | `GoalInferenceResult` |
+| `POST /goals/confirm` | 201 | `Goal` |
+
+The workflow store is located in `apps/api/src/features/workflow/in-memory-workflow-store.ts`. It is deliberately local and resettable while the PostgreSQL/Drizzle repository layer is not implemented.
+
 ## Next implementation steps
 
-1. Install dependencies and run the API contract tests and typecheck.
-2. Add the Fastify `Idempotency-Key` pre-handler and return `IDEMPOTENCY_KEY_REQUIRED` or `IDEMPOTENCY_KEY_REUSED` according to the documented rules.
-3. Add the first real API vertical slice: observations → goal inference → goal confirmation.
-4. Add repository and service errors that throw `ApiHttpError` instead of returning ad hoc error objects.
-5. Implement the remaining REST routes for checkpoints, gaps, actions, and recovery.
-6. Connect the SSE publisher and verify event ordering and reconnection behavior.
-7. Add end-to-end tests for the complete demo flow and failure scenarios.
+1. Replace the in-memory workflow and idempotency stores with Drizzle/PostgreSQL repositories, including idempotency TTL cleanup.
+2. Add repository and service errors that throw `ApiHttpError` instead of returning ad hoc error objects.
+3. Implement checkpoints, Gap start/end, action approval, and recovery brief REST routes.
+4. Connect the SSE publisher and verify event ordering and `Last-Event-ID` reconnection behavior.
+5. Replace the fixture Goal Interpreter through its interface with the real Member 4 agent implementation and preserve a fixture fallback.
+6. Add end-to-end tests for the complete demo flow, concurrent duplicate requests, process restart behavior, and failure scenarios.
 
 ## Request body contracts
 

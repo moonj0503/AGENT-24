@@ -12,6 +12,12 @@ export const ObservationRequestSchema = z.object({
   events: z.array(ActivityEventSchema).min(1),
 });
 
+/** Successful response for POST /observations. */
+export const ObservationIngestionResultSchema = z.object({
+  workSessionId: IdentifierSchema,
+  acceptedEventIds: z.array(IdentifierSchema).min(1),
+});
+
 /** POST /goal-inferences */
 export const GoalInferenceRequestSchema = z.object({
   workSessionId: IdentifierSchema,
@@ -79,6 +85,7 @@ export const EndGapRequestSchema = z.object({
 });
 
 export type ObservationRequest = z.infer<typeof ObservationRequestSchema>;
+export type ObservationIngestionResult = z.infer<typeof ObservationIngestionResultSchema>;
 export type GoalInferenceRequest = z.infer<typeof GoalInferenceRequestSchema>;
 export type ConfirmGoalRequest = z.infer<typeof ConfirmGoalRequestSchema>;
 export type StartGapRequest = z.infer<typeof StartGapRequestSchema>;
