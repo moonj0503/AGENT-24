@@ -1,4 +1,5 @@
 import {
+  type ActionPlan,
   ObservationIngestionResultSchema,
   type ActivityEvent,
   type Checkpoint,
@@ -6,6 +7,8 @@ import {
   type Goal,
   type GoalInferenceResult,
   type ObservationRequest,
+  type PlannedAction,
+  type RecoveryBrief,
 } from "@continuity/contracts";
 import type { StoredGoalInference, WorkflowRepository } from "./workflow-repository.js";
 
@@ -15,6 +18,8 @@ export class InMemoryWorkflowRepository implements WorkflowRepository {
   private readonly goals = new Map<string, Goal>();
   private readonly checkpoints = new Map<string, Checkpoint>();
   private readonly gapSessions = new Map<string, GapSession>();
+  private readonly actionsByGap = new Map<string, Map<string, PlannedAction>>();
+  private readonly recoveryBriefs = new Map<string, RecoveryBrief>();
 
   constructor(initial: {
     readonly goals?: readonly Goal[];
@@ -67,11 +72,43 @@ export class InMemoryWorkflowRepository implements WorkflowRepository {
     return this.goals.get(goalId) ?? null;
   }
 
+  async saveCheckpoint(checkpoint: Checkpoint): Promise<void> {
+    this.checkpoints.set(checkpoint.checkpointId, checkpoint);
+  }
+
   async getCheckpoint(checkpointId: string): Promise<Checkpoint | null> {
     return this.checkpoints.get(checkpointId) ?? null;
   }
 
+  async saveGapSession(gapSession: GapSession): Promise<void> {
+    this.gapSessions.set(gapSession.gapId, gapSession);
+  }
+
   async getGapSession(gapId: string): Promise<GapSession | null> {
     return this.gapSessions.get(gapId) ?? null;
+  }
+
+  async saveActionPlan(actionPlan: ActionPlan): Promise<void> {
+    const actions = new Map(actionPlan.actions.map((action) => [action.actionId, action]));
+    this.actionsByGap.set(actionPlan.gapId, actions);
+  }
+
+  async getAction(gapId: string, actionId: string): Promise<PlannedAction | null> {
+    return this.actionsByGap.get(gapId)?.get(actionId) ?? null;
+  }
+
+  async updateAction(
+    gapId: string,
+    action: PlannedAction,
+    _decision?: "APPROVE" | "REJECT",
+    _reason?: string,
+  ): Promise<void> {
+    const actions = this.actionsByGap.get(gapId) ?? new Map<string, PlannedAction>();
+    actions.set(action.actionId, action);
+    this.actionsByGap.set(gapId, actions);
+  }
+
+  async saveRecoveryBrief(recoveryBrief: RecoveryBrief): Promise<void> {
+    this.recoveryBriefs.set(recoveryBrief.briefId, recoveryBrief);
   }
 }

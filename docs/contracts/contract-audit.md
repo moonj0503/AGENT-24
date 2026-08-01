@@ -22,6 +22,8 @@ The API request schemas described in the audit have now been added in `packages/
 
 The common API error schema has also been added in `packages/contracts/src/errors.ts`, with representative fixtures, tests, and HTTP documentation.
 
+Checkpoint creation, persistent Gap lifecycle routes, recovery runtime persistence, and an in-memory SSE publisher are now implemented. The remaining SSE contract work is durable replay and typed payload schemas.
+
 ## Existing schema-to-fixture coverage
 
 | Schema | Fixture | Result | Notes |
@@ -127,9 +129,10 @@ These are the next tasks after this audit, in priority order:
 2. Add a policy evaluation result schema and fixture.
 3. Make SSE payloads event-specific or define a documented payload mapping.
 4. Add schema tests for all existing and new fixtures.
-5. Apply and integration-test the new PostgreSQL migration, then add TTL cleanup and a migration runner.
-6. Continue the route → service → repository pattern for checkpoints, Gaps, actions, and recovery.
-7. Announce the frozen contract and route all later changes through `chore/contracts-v2`.
+5. Apply and integration-test the lifecycle PostgreSQL migration, then add TTL cleanup and a deployment migration runner.
+6. Add fixtures for `Checkpoint`, `ActionResult`, and SSE `AgentEvent` payloads, then make SSE payloads event-specific.
+7. Persist SSE events for replay after process restart and add full end-to-end lifecycle tests.
+8. Announce the frozen contract and route all later changes through `chore/contracts-v2`.
 
 ## Audit conclusion
 

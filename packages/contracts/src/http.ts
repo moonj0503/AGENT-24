@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { ActivityEventSchema } from "./activity.js";
 import { ActionPlanSchema, ActionResultSchema } from "./action.js";
+import { CheckpointSchema } from "./checkpoint.js";
+import { GapSessionSchema } from "./gap.js";
 import { RecoveryBriefSchema } from "./recovery.js";
 
 const IdentifierSchema = z.string().min(1);
@@ -47,12 +49,31 @@ export const ConfirmGoalRequestSchema = z.object({
   ]),
 });
 
+/** POST /checkpoints */
+export const CreateCheckpointRequestSchema = z.object({
+  goalId: IdentifierSchema,
+  currentState: z.string().min(1),
+  completedSincePrevious: z.array(z.string()),
+  openQuestions: z.array(z.string()),
+  likelyNextActions: z.array(z.object({
+    title: z.string().min(1),
+    estimatedMinutes: z.number().int().positive(),
+  })),
+  relatedResources: z.array(z.object({
+    title: z.string().min(1),
+    kind: z.string().min(1),
+  })),
+  confidence: z.number().min(0).max(1),
+});
+
 /** POST /gaps */
 export const StartGapRequestSchema = z.object({
   workSessionId: IdentifierSchema,
   goalId: IdentifierSchema,
   checkpointId: IdentifierSchema,
 });
+
+export const StartGapResponseSchema = GapSessionSchema;
 
 /** POST /gaps/:gapId/actions/:actionId/approval (path contract) */
 export const ActionApprovalParamsSchema = z.object({
@@ -86,6 +107,8 @@ export const EndGapRequestSchema = z.object({
   reason: z.string().min(1).optional(),
 });
 
+export const EndGapResponseSchema = GapSessionSchema;
+
 /** POST /gaps/:gapId/run (path contract) */
 export const RunGapRecoveryParamsSchema = z.object({
   gapId: IdentifierSchema,
@@ -108,6 +131,7 @@ export type ObservationRequest = z.infer<typeof ObservationRequestSchema>;
 export type ObservationIngestionResult = z.infer<typeof ObservationIngestionResultSchema>;
 export type GoalInferenceRequest = z.infer<typeof GoalInferenceRequestSchema>;
 export type ConfirmGoalRequest = z.infer<typeof ConfirmGoalRequestSchema>;
+export type CreateCheckpointRequest = z.infer<typeof CreateCheckpointRequestSchema>;
 export type StartGapRequest = z.infer<typeof StartGapRequestSchema>;
 export type ActionApprovalParams = z.infer<typeof ActionApprovalParamsSchema>;
 export type ActionApprovalRequest = z.infer<typeof ActionApprovalRequestSchema>;
