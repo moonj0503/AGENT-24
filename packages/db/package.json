@@ -6,7 +6,7 @@
   "exports": { ".": "./src/index.ts" },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "migrate": "tsx src/migrate.ts",
+    "migrate": "node --env-file-if-exists=../../.env --import tsx src/migrate.ts",
     "test": "vitest run --passWithNoTests",
     "typecheck": "tsc --noEmit"
   },

@@ -166,21 +166,22 @@ An approval and an execution result are intentionally different records. `gap_ac
 
 ## Next implementation steps
 
-1. Apply the latest migrations (including `0003_action_results.sql`) to the PostgreSQL database, then run:
+1. Create the ignored repository-root `.env` by copying `.env.example` and replacing only `YOUR_URL_ENCODED_PASSWORD`. The package scripts load that root file when it exists. Do not commit `.env`.
+
+2. Apply the latest migrations (including `0003_action_results.sql`) to the PostgreSQL database, then run:
 
    ```powershell
-   $env:DATABASE_URL = "postgresql://user:password@localhost:5432/continuity"
-   corepack.cmd pnpm --filter @continuity/db migrate
+   corepack.cmd pnpm --filter @continuity/db run migrate
    ```
 
-2. Start the production-wired API with `corepack.cmd pnpm --filter @continuity/api dev` and verify the full Goal → Checkpoint → Gap → Recovery flow.
-3. Run `corepack.cmd pnpm --filter @continuity/api test`; the PostgreSQL Repository test runs when `DATABASE_URL` is set and skips otherwise.
-4. Add idempotency TTL cleanup scheduling and make migration execution part of the deployment pipeline.
-5. Connect the Desktop History list/detail screens to the new `GET /gaps` and `GET /gaps/:gapId` APIs; remove static demo activity only after the integration is verified.
-6. Complete the approved-tool lifecycle: a separate, policy-checked worker must execute approved actions, persist `ActionResult`, and emit a fresh event. Do not make the approval endpoint execute tools directly.
-7. Store SSE events durably so reconnect replay survives an API restart.
-8. Replace the fixture Goal Interpreter through its interface with the real Member 4 agent implementation and preserve a fixture fallback.
-9. Add end-to-end tests for the complete demo flow, concurrent duplicate requests, process restart behavior, and failure scenarios.
+3. Start the production-wired API with `corepack.cmd pnpm --filter @continuity/api dev` and verify the full Goal → Checkpoint → Gap → Recovery flow.
+4. Run `corepack.cmd pnpm --filter @continuity/api test`; set `DATABASE_URL` in the current PowerShell session as well when running the PostgreSQL integration test directly.
+5. Add idempotency TTL cleanup scheduling and make migration execution part of the deployment pipeline.
+6. Connect the Desktop History list/detail screens to the new `GET /gaps` and `GET /gaps/:gapId` APIs; remove static demo activity only after the integration is verified.
+7. Complete the approved-tool lifecycle: a separate, policy-checked worker must execute approved actions, persist `ActionResult`, and emit a fresh event. Do not make the approval endpoint execute tools directly.
+8. Store SSE events durably so reconnect replay survives an API restart.
+9. Replace the fixture Goal Interpreter through its interface with the real Member 4 agent implementation and preserve a fixture fallback.
+10. Add end-to-end tests for the complete demo flow, concurrent duplicate requests, process restart behavior, and failure scenarios.
 
 ## Request body contracts
 
