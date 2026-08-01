@@ -205,26 +205,30 @@ Show:
 
 1. The user edits a report in Microsoft Word.
 2. The user searches for related material in Chrome.
-3. The system proposes several goal candidates:
+3. The Goal Confirmation Quick Overlay displays several goal candidates:
    - Write the final project report
    - Study QR factorization
    - Prepare a presentation
-4. The user selects `Write the final project report`.
+4. The user selects `Write the final project report` in the Quick Overlay.
 5. The AI stores the current stage as `Write the numerical stability section for QR factorization`.
 6. The user presses the `Start Gap` button.
-7. The Continuity Agent creates a temporary objective:
+7. The Gap Start Confirmation Quick Overlay appears.
+8. The user confirms Gap Mode in the Quick Overlay. Only this confirmation sends `POST /api/v1/gaps`.
+9. The Continuity Agent creates a temporary objective:
    - “Preserve the report-writing workflow and minimize recovery cost.”
-8. The agent executes policy-approved tools:
-   - Organizes relevant references
-   - Creates an outline for the next paragraph
-   - Summarizes new team messages
-   - Creates a reply draft
-9. The user returns.
-10. The recovery screen displays:
-   - The previous goal
-   - Completed preparation tasks
-   - No external messages were sent
-   - Recommended next action: “Review the QR stability outline”
+10. The agent executes policy-approved tools:
+    - Organizes relevant references
+    - Creates an outline for the next paragraph
+    - Summarizes new team messages
+    - Creates a reply draft
+11. The user returns.
+12. The Recovery Notification Quick Overlay appears.
+13. The user selects `Open Full Recovery Brief`.
+14. The Main Window displays:
+    - The previous goal
+    - Completed preparation tasks
+    - No external messages were sent
+    - Recommended next action: “Review the QR stability outline”
 
 ## 4.2 What the Demo Must Prove
 
@@ -305,6 +309,60 @@ Audit Log
 ```
 
 The model never receives unrestricted authority to execute external actions directly.
+
+## 5.3 Desktop Window Architecture
+
+The desktop application uses two Tauri windows that reuse the same React codebase, API client, shared contracts, Zustand store definitions, and design tokens.
+
+```text
+Desktop Application
+├─ Main Window
+│  ├─ Dashboard, including Full Gap Status
+│  ├─ Full Recovery Brief
+│  ├─ History
+│  └─ Permission Settings
+│
+└─ Quick Overlay Window
+   ├─ Goal Confirmation
+   ├─ Gap Start Confirmation
+   ├─ Approval Request
+   └─ Recovery Notification
+```
+
+The Quick Overlay does not replace the Main Window.
+
+The two windows do not directly share in-memory Zustand state. Persistent backend state is the source of truth. Window-to-window UI synchronization uses REST, SSE, and Tauri events.
+
+Detailed information remains available in the Main Window. Both windows must reuse the same feature API functions, shared contracts, store definitions, and design tokens. Business logic must not be duplicated between the Main Window and the Quick Overlay.
+
+## 5.4 Desktop Window Communication
+
+The Main Window and Quick Overlay use Tauri events for desktop-only notifications and the existing REST and SSE interfaces for persistent application state.
+
+Required desktop events:
+
+```text
+overlay.goal-confirmation
+overlay.gap-start-confirmation
+overlay.approval-required
+overlay.recovery-ready
+overlay.dismiss
+```
+
+Event payloads must use existing shared contracts whenever possible.
+
+The Quick Overlay fetches detailed server data through the existing feature API functions. It must not create a second backend flow or duplicate backend business logic.
+
+The Main Window may request that the Quick Overlay display a short interaction. The Quick Overlay may request that the Main Window open and focus a detailed screen.
+
+Required native command names:
+
+```text
+show_overlay
+hide_overlay
+position_overlay
+open_main_window
+```
 
 ---
 
@@ -395,6 +453,15 @@ continuity-agent/
 │  │  │  │  ├─ gap-session.json
 │  │  │  │  ├─ action-plan.json
 │  │  │  │  └─ recovery-brief.json
+│  │  │  ├─ overlay/
+│  │  │  │  ├─ OverlayApp.tsx
+│  │  │  │  ├─ OverlayRoot.tsx
+│  │  │  │  ├─ overlay-store.ts
+│  │  │  │  └─ components/
+│  │  │  │     ├─ GoalConfirmationOverlay.tsx
+│  │  │  │     ├─ GapStartOverlay.tsx
+│  │  │  │     ├─ ApprovalOverlay.tsx
+│  │  │  │     └─ RecoveryNotificationOverlay.tsx
 │  │  │  ├─ pages/
 │  │  │  │  ├─ DashboardPage.tsx
 │  │  │  │  ├─ RecoveryPage.tsx
@@ -407,6 +474,7 @@ continuity-agent/
 │  │  │  │  ├─ commands/
 │  │  │  │  │  ├─ activity.rs
 │  │  │  │  │  ├─ privacy.rs
+│  │  │  │  │  ├─ overlay.rs
 │  │  │  │  │  └─ mod.rs
 │  │  │  │  ├─ observer/
 │  │  │  │  │  ├─ active_window.rs
@@ -536,6 +604,26 @@ continuity-agent/
 ├─ turbo.json
 └─ tsconfig.base.json
 ```
+
+## 7.1 Desktop Entry-Point Rule
+
+The Main Window and Quick Overlay use the same Vite entry point: `apps/desktop/src/main.tsx`.
+
+`main.tsx` checks the current Tauri window label:
+
+```text
+main
+→ render App
+
+quick-overlay
+→ render OverlayApp
+```
+
+Do not create a second Vite application, a second desktop package, or an independent overlay backend.
+
+`OverlayApp.tsx` owns overlay rendering. `OverlayRoot.tsx` selects exactly one of the four overlay states. `overlay-store.ts` stores only overlay-local presentation state and references to persistent IDs such as `inferenceId`, `gapId`, or `actionId`.
+
+Persistent domain state must come from the existing feature APIs, REST responses, SSE events, or Tauri event payloads. The overlay must not duplicate the Main Window router or business logic.
 
 ---
 
@@ -1446,6 +1534,11 @@ Responsibilities:
 - Manage local SQLite storage
 - Implement blocked-app and privacy filters
 - Provide the Observation API integration interface
+- Create and configure the native Quick Overlay Tauri window
+- Configure always-on-top, frameless behavior, size, and bottom-right positioning
+- Implement native commands for showing, hiding, and positioning the overlay
+- Implement a native command for opening and focusing the Main Window at a requested screen
+- Own all changes to Tauri window configuration and capabilities
 
 Definition of done:
 
@@ -1453,6 +1546,10 @@ Definition of done:
 - No events are created for blocked applications.
 - A sanitized ActivityEvent array is produced.
 - A mock event generator can replace the native observer.
+- The Quick Overlay can be shown and hidden through Tauri commands.
+- The overlay appears above other applications without replacing the Main Window.
+- The overlay can load the React overlay entry point using mock data.
+- The overlay can open and focus the Main Window on `dashboard`, `approval`, `recovery`, or `settings`.
 
 ## 17.3 Member 2 — Product & Frontend
 
@@ -1471,7 +1568,13 @@ Required screens:
 - Agent progress view
 - Action approval and rejection
 - Recovery brief
+- History
 - Permission settings
+- Quick Overlay
+  - Goal confirmation
+  - Gap start confirmation
+  - Action approval and rejection
+  - Recovery notification
 
 Definition of done:
 
@@ -1479,6 +1582,20 @@ Definition of done:
 - API access is isolated in `features/*/api.ts`.
 - Loading, error, and empty states are handled.
 - SSE events update the UI correctly.
+- The complete Quick Overlay flow works with mock JSON.
+- The overlay supports goal confirmation, gap start confirmation, approval, and recovery notification states.
+- The overlay can open the corresponding detailed screen in the Main Window.
+- The overlay UI can be tested independently before native Tauri window integration.
+
+Quick Overlay rules:
+
+- The Quick Overlay is a separate lightweight Tauri window.
+- Member 2 owns only the React UI, UI state, and user interactions rendered inside the overlay.
+- Overlay components must reuse the existing feature APIs, shared contracts, Zustand store definitions, and design tokens.
+- The two windows must not assume that in-memory Zustand state is shared automatically.
+- Persistent state synchronization must use REST, SSE, and Tauri events.
+- Business logic must not be duplicated between the Main Window and the Quick Overlay.
+- Detailed views remain available in the Main Window.
 
 ## 17.4 Member 3 — Backend & Data
 
@@ -1729,12 +1846,17 @@ Completion criteria:
 Windows Observer
 → Privacy Filter
 → ActivityEvent
+→ Mock Quick Overlay Window
+→ Show / Hide / Position Commands
+→ Open / Focus Main Window Command
 ```
 
 ### Member 2
 
 ```text
 Mock Goal
+→ Main Window Flow
+→ Overlay State UI
 → Gap UI
 → Action Progress
 → Recovery UI
@@ -1769,6 +1891,7 @@ Observer
 → Goal Interpreter
 → Goal API
 → Goal UI
+→ Goal Confirmation Overlay Integration
 ```
 
 ## Phase 3 — Second Integration
@@ -1780,6 +1903,8 @@ Gap UI
 → Policy Engine
 → Tool Executor
 → SSE
+→ Approval Overlay
+→ Gap Status UI
 → Action UI
 ```
 
@@ -1789,7 +1914,8 @@ Gap UI
 Gap End
 → Action Results
 → Recovery Brief
-→ Recovery UI
+→ Recovery Notification Overlay
+→ Full Recovery UI
 ```
 
 ## Phase 5 — Demo Stabilization
@@ -1815,6 +1941,14 @@ Gap End
 - Sensitive-data redactor
 - ActivityEvent conversion
 
+### Frontend
+
+- Overlay state priority
+- Overlay dismissal behavior
+- Main Window fallback behavior
+- Gap confirmation sends exactly one Gap API request
+- Overlay components reuse shared feature APIs
+
 ### Backend
 
 - Zod schemas
@@ -1839,18 +1973,27 @@ Gap End
 - Approval → Tool Execution
 - Gap End → Recovery Brief
 - SSE ordering and reconnection
+- Goal inference result → Goal Confirmation Overlay
+- Start Gap request → Gap Start Confirmation → single Gap API call
+- `approval.required` SSE → Approval Overlay
+- `recovery.ready` SSE → Recovery Notification Overlay
+- Overlay detail action → Main Window opens at the correct screen
 
 ## 21.3 End-to-End Test
 
 ```text
 Submit mock activity
-→ Display goal candidates
+→ Display goal candidates in Quick Overlay
 → Confirm a goal
-→ Start a gap
-→ Display action plan
+→ Request Gap Start
+→ Confirm Gap Start in Quick Overlay
+→ Send one Gap API request
+→ Display action progress
+→ Display approval in Quick Overlay
 → Approve an action
 → End the gap
-→ Display recovery brief
+→ Display Recovery Notification Overlay
+→ Open Full Recovery Brief in Main Window
 ```
 
 ## 21.4 Failure Scenarios
@@ -1863,6 +2006,10 @@ Submit mock activity
 - Database write failure
 - Immediate user return after gap start
 - Gap start without a confirmed goal
+- Native overlay window unavailable
+- Duplicate Tauri overlay event
+- Overlay dismissed while persistent state remains active
+- Main Window fails to focus from the overlay
 
 ---
 
@@ -1990,6 +2137,105 @@ Recommended Next Step
 Review the QR stability outline — about 10 minutes
 ```
 
+## 24.6 Quick Overlay
+
+The Quick Overlay is a separate lightweight Tauri window for short, time-sensitive interactions while the user is working in another application.
+
+It is part of the MVP and is not optional.
+
+### Overlay Principles
+
+- The overlay does not replace the Main Window.
+- The overlay must show only one interaction at a time.
+- Detailed information must remain in the Main Window.
+- The overlay must not contain independent business logic.
+- It must reuse the same feature APIs, Zustand store definitions, shared contracts, and design tokens as the Main Window.
+- The Main Window and Quick Overlay do not directly share in-memory Zustand state.
+- Persistent state synchronization must use REST, SSE, and Tauri events.
+- Closing or dismissing the overlay must not lose the current goal, gap session, action, or recovery state.
+- The user must always be able to open the relevant detailed Main Window screen.
+
+### Overlay States
+
+The MVP supports exactly four overlay states:
+
+1. `GOAL_CONFIRMATION`
+2. `GAP_START_CONFIRMATION`
+3. `APPROVAL_REQUIRED`
+4. `RECOVERY_READY`
+
+### Goal Confirmation Overlay
+
+Show:
+
+- Up to three inferred goal candidates
+- Confidence for each candidate
+- A short evidence summary
+- Select action
+- Enter a different goal action
+- Open details in the Main Window
+
+### Gap Start Confirmation Overlay
+
+Show:
+
+- Confirmed current goal
+- Latest checkpoint summary
+- Start Gap action
+- Cancel action
+
+The initial `Start Gap` button only opens the confirmation overlay.
+
+The `POST /api/v1/gaps` request is sent exactly once, only after the user confirms Start Gap in the overlay.
+
+If the native overlay is unavailable, confirmation occurs in the Main Window before the request is sent.
+
+### Approval Overlay
+
+Show:
+
+- Requested action
+- Reason
+- External impact
+- Reversibility
+- Approve action
+- Reject action
+- Open full details in the Main Window
+
+### Recovery Notification Overlay
+
+Show:
+
+- Gap duration
+- Previous goal
+- Number of completed actions
+- Whether any external effect occurred
+- Recommended next action
+- Resume action
+- Open Full Recovery Brief action
+
+### Display Rules
+
+- Goal confirmation appears only when the Goal Interpreter requires user confirmation.
+- Gap start confirmation appears only after a manual Gap Start request or an enabled inactivity suggestion.
+- Approval appears only for an action in `WAITING_APPROVAL`.
+- Recovery notification appears when the `recovery.ready` event is received.
+- Only one overlay state may be visible at a time.
+- Overlay priority is:
+
+```text
+APPROVAL_REQUIRED
+→ RECOVERY_READY
+→ GAP_START_CONFIRMATION
+→ GOAL_CONFIRMATION
+```
+
+### Fallback
+
+If the native overlay window is unavailable, the same interaction must remain accessible in the Main Window.
+
+The Main Window is the guaranteed fallback for the complete demo flow.
+
 ---
 
 # 25. Success Metrics
@@ -2047,6 +2293,13 @@ Review the QR stability outline — about 10 minutes
 - [ ] Blocked-app filter
 - [ ] ActivityEvent generation
 - [ ] Mock observer fallback
+- [ ] Quick Overlay native window
+- [ ] Always-on-top behavior
+- [ ] Overlay show and hide commands
+- [ ] Bottom-right window positioning
+- [ ] Open and focus Main Window command
+- [ ] Tauri event communication between windows
+- [ ] Main Window fallback when overlay fails
 
 ## Frontend
 
@@ -2056,6 +2309,16 @@ Review the QR stability outline — about 10 minutes
 - [ ] Approval dialog
 - [ ] Recovery brief
 - [ ] SSE integration
+- [ ] Goal confirmation overlay
+- [ ] Gap start confirmation overlay
+- [ ] Approval overlay
+- [ ] Recovery notification overlay
+- [ ] Overlay state priority handling
+- [ ] Open detailed Main Window screen from overlay
+- [ ] Shared API, store-definition, and design-token reuse
+- [ ] REST, SSE, and Tauri event synchronization
+- [ ] Gap confirmation sends exactly one API request
+- [ ] History screen
 
 ## Backend
 
@@ -2077,7 +2340,7 @@ Review the QR stability outline — about 10 minutes
 
 ## Demo
 
-- [ ] Presentation activity scenario
+- [ ] Presentation activity scenario includes all four overlay states
 - [ ] OpenAI failure fallback
 - [ ] External-effects disclosure
 - [ ] Risky-action blocking demonstration
