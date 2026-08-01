@@ -1,0 +1,14 @@
+{
+  "code": "VALIDATION_ERROR",
+  "message": "Request body is invalid.",
+  "requestId": "req-001",
+  "details": {
+    "fields": [
+      {
+        "path": ["reason"],
+        "message": "A rejection reason is required."
+      }
+    ]
+  },
+  "retryable": false
+}

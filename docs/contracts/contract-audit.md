@@ -20,6 +20,8 @@ This document records findings only. It does not change the existing shared sche
 
 The API request schemas described in the audit have now been added in `packages/contracts/src/http.ts` and exported from `packages/contracts/src/index.ts`. Request examples were added to `packages/contracts/src/fixtures`, and schema tests were added to `packages/contracts/tests/http.test.ts`.
 
+The common API error schema has also been added in `packages/contracts/src/errors.ts`, with representative fixtures, tests, and HTTP documentation.
+
 ## Existing schema-to-fixture coverage
 
 | Schema | Fixture | Result | Notes |
@@ -121,13 +123,12 @@ ConfirmGoalRequest.candidateId
 
 These are the next tasks after this audit, in priority order:
 
-1. Add a common error schema.
-2. Add missing fixtures for `Goal`, `Checkpoint`, `ActionResult`, and `AgentEvent`.
-3. Add a policy evaluation result schema and fixture.
-4. Make SSE payloads event-specific or define a documented payload mapping.
-5. Add schema tests for all existing and new fixtures.
-6. Update `docs/contracts/http-and-sse.md` with exact request/response examples.
-7. Announce the frozen contract and route all later changes through `chore/contracts-v2`.
+1. Add missing fixtures for `Goal`, `Checkpoint`, `ActionResult`, and `AgentEvent`.
+2. Add a policy evaluation result schema and fixture.
+3. Make SSE payloads event-specific or define a documented payload mapping.
+4. Add schema tests for all existing and new fixtures.
+5. Add the Fastify `Idempotency-Key` pre-handler and connect repository/service errors to `ApiHttpError`.
+6. Announce the frozen contract and route all later changes through `chore/contracts-v2`.
 
 ## Audit conclusion
 
