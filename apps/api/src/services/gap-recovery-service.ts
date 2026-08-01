@@ -3,11 +3,13 @@ import type {
   RunGapRecoveryRequest,
   RunGapRecoveryResponse,
 } from "@continuity/contracts";
+import { randomUUID } from "node:crypto";
 import {
   RuntimeContextValidationError,
   RuntimeExecutionError,
   type RuntimeOrchestrator,
 } from "../agents/runtime/index.js";
+import type { AgentEventPublisher } from "../features/workflow/event-bus.js";
 import { ApiHttpError } from "../plugins/error-handler.js";
 import type { WorkflowRepository } from "../repositories/workflow-repository.js";
 
@@ -24,6 +26,7 @@ export class GapRecoveryService {
     private readonly repository: WorkflowRepository,
     private readonly runtime: RuntimeOrchestrator,
     private readonly clock: Clock = systemClock,
+    private readonly events?: AgentEventPublisher,
   ) {}
 
   async run(
@@ -39,18 +42,14 @@ export class GapRecoveryService {
       throw new ApiHttpError("CONFLICT", "The recovery context identities do not match.");
     }
 
+    let result;
     try {
-      const result = await this.runtime.run({
+      result = await this.runtime.run({
         goal,
         checkpoint,
         gapSession,
         occurredAt: this.clock.now(),
       });
-      return {
-        actionPlan: result.actionPlan,
-        actionResults: [...result.actionResults],
-        recoveryBrief: result.recoveryBrief,
-      };
     } catch (cause) {
       if (cause instanceof RuntimeContextValidationError) {
         throw new ApiHttpError("CONFLICT", "The recovery context identities do not match.", { cause });
@@ -60,6 +59,25 @@ export class GapRecoveryService {
       }
       throw new ApiHttpError("AGENT_FAILURE", "The recovery runtime could not complete.", { cause });
     }
+
+    try {
+      await this.repository.saveActionPlan(result.actionPlan);
+      await this.repository.saveRecoveryBrief(result.recoveryBrief);
+    } catch (cause) {
+      throw new ApiHttpError("DATABASE_FAILURE", "The recovery result could not be saved.", { cause });
+    }
+    this.events?.publish({
+      eventId: `event-${randomUUID()}`,
+      type: "RECOVERY_READY",
+      gapId: gapSession.gapId,
+      occurredAt: this.clock.now(),
+      payload: { recoveryBrief: result.recoveryBrief },
+    });
+    return {
+      actionPlan: result.actionPlan,
+      actionResults: [...result.actionResults],
+      recoveryBrief: result.recoveryBrief,
+    };
   }
 
   private async loadContext(params: RunGapRecoveryParams, request: RunGapRecoveryRequest) {
@@ -84,6 +102,7 @@ export function createGapRecoveryService(
   repository: WorkflowRepository,
   runtime: RuntimeOrchestrator,
   clock: Clock = systemClock,
+  events?: AgentEventPublisher,
 ): GapRecoveryService {
-  return new GapRecoveryService(repository, runtime, clock);
+  return new GapRecoveryService(repository, runtime, clock, events);
 }

@@ -12,11 +12,18 @@ import {
   type Clock,
   type GapRecoveryService,
 } from "./services/gap-recovery-service.js";
+import { InMemoryAgentEventBus } from "./features/workflow/event-bus.js";
+import {
+  createGapLifecycleService,
+  type GapLifecycleService,
+} from "./services/gap-lifecycle-service.js";
 
 export interface ApplicationDependencies {
   readonly workflowService: WorkflowService;
   readonly agentBundle: AgentRuntimeBundle;
   readonly gapRecoveryService: GapRecoveryService;
+  readonly gapLifecycleService: GapLifecycleService;
+  readonly eventBus: InMemoryAgentEventBus;
 }
 
 export interface ApplicationCompositionOptions {
@@ -33,16 +40,21 @@ export function createApplicationDependencies(
 ): ApplicationDependencies {
   const createBundle = options.createAgentRuntimeBundle ?? createAgentRuntimeBundle;
   const agentBundle = createBundle(environment);
+  const eventBus = new InMemoryAgentEventBus();
   return {
     agentBundle,
+    eventBus,
     workflowService: createWorkflowService(
       options.workflowRepository,
       agentBundle.goalInterpreter,
+      eventBus,
     ),
     gapRecoveryService: createGapRecoveryService(
       options.workflowRepository,
       agentBundle.runtime,
       options.clock,
+      eventBus,
     ),
+    gapLifecycleService: createGapLifecycleService(options.workflowRepository, eventBus, options.clock),
   };
 }

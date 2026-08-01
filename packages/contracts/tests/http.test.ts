@@ -5,6 +5,7 @@ import {
   ActionApprovalParamsSchema,
   ActionApprovalRequestSchema,
   ConfirmGoalRequestSchema,
+  CreateCheckpointRequestSchema,
   EndGapParamsSchema,
   EndGapRequestSchema,
   GoalInferenceRequestSchema,
@@ -15,6 +16,8 @@ import {
   RunGapRecoveryParamsSchema,
   RunGapRecoveryRequestSchema,
   RunGapRecoveryResponseSchema,
+  StartGapResponseSchema,
+  EndGapResponseSchema,
   ActionPlanSchema,
   ActionResultSchema,
   RecoveryBriefSchema,
@@ -35,6 +38,32 @@ describe("HTTP request contracts", () => {
   it("supports selecting an inferred goal or entering a manual correction", () => {
     expect(ConfirmGoalRequestSchema.safeParse(fixture("confirm-goal-candidate-request.json")).success).toBe(true);
     expect(ConfirmGoalRequestSchema.safeParse(fixture("confirm-goal-manual-request.json")).success).toBe(true);
+  });
+
+  it("validates server-generated Checkpoints and Gap lifecycle responses", () => {
+    expect(CreateCheckpointRequestSchema.safeParse({
+      goalId: "goal-001",
+      currentState: "Writing the report.",
+      completedSincePrevious: [],
+      openQuestions: [],
+      likelyNextActions: [{ title: "Review the draft", estimatedMinutes: 10 }],
+      relatedResources: [{ title: "Report.docx", kind: "DOCUMENT" }],
+      confidence: 0.8,
+    }).success).toBe(true);
+    const gap = {
+      gapId: "gap-001",
+      workSessionId: "ws-001",
+      goalId: "goal-001",
+      checkpointId: "checkpoint-001",
+      status: "PLANNING",
+      startedAt: "2026-08-01T09:10:00.000Z",
+    };
+    expect(StartGapResponseSchema.safeParse(gap).success).toBe(true);
+    expect(EndGapResponseSchema.safeParse({
+      ...gap,
+      status: "COMPLETED",
+      endedAt: "2026-08-01T09:20:00.000Z",
+    }).success).toBe(true);
   });
 
   it("accepts gap start, approval, and gap end requests", () => {

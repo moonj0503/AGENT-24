@@ -8,6 +8,7 @@ import {
   GoalSchema,
 } from "@continuity/contracts";
 import { FixtureGoalInterpreter, type GoalInterpreter } from "../agents/goal-interpreter/index.js";
+import type { AgentEventPublisher } from "../features/workflow/event-bus.js";
 import { ApiHttpError } from "../plugins/error-handler.js";
 import type { WorkflowRepository } from "../repositories/workflow-repository.js";
 import { InMemoryWorkflowRepository } from "../repositories/in-memory-workflow-repository.js";
@@ -16,6 +17,7 @@ export class WorkflowService {
   constructor(
     private readonly repository: WorkflowRepository,
     private readonly goalInterpreter: GoalInterpreter,
+    private readonly events?: AgentEventPublisher,
   ) {}
 
   async ingestObservations(request: ObservationRequest) {
@@ -54,6 +56,12 @@ export class WorkflowService {
 
     try {
       await this.repository.saveInference(request.workSessionId, result);
+      this.events?.publish({
+        eventId: `event-${randomUUID()}`,
+        type: "GOAL_INFERRED",
+        occurredAt: new Date().toISOString(),
+        payload: { result },
+      });
       return result;
     } catch (cause) {
       throw new ApiHttpError("DATABASE_FAILURE", "The goal inference could not be saved.", { cause });
@@ -111,10 +119,14 @@ export class WorkflowService {
 export function createWorkflowService(
   repository: WorkflowRepository,
   goalInterpreter: GoalInterpreter,
+  events?: AgentEventPublisher,
 ): WorkflowService {
-  return new WorkflowService(repository, goalInterpreter);
+  return new WorkflowService(repository, goalInterpreter, events);
 }
 
-export function createInMemoryWorkflowService(goalInterpreter: GoalInterpreter = new FixtureGoalInterpreter()): WorkflowService {
-  return createWorkflowService(new InMemoryWorkflowRepository(), goalInterpreter);
+export function createInMemoryWorkflowService(
+  goalInterpreter: GoalInterpreter = new FixtureGoalInterpreter(),
+  events?: AgentEventPublisher,
+): WorkflowService {
+  return createWorkflowService(new InMemoryWorkflowRepository(), goalInterpreter, events);
 }

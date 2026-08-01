@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import postgres from "postgres";
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -6,13 +6,18 @@ if (!databaseUrl) {
   throw new Error("DATABASE_URL is required to apply the workflow migration.");
 }
 
-const migrationUrl = new URL("../migrations/0001_workflow.sql", import.meta.url);
-const migration = await readFile(migrationUrl, "utf8");
+const migrationsUrl = new URL("../migrations/", import.meta.url);
+const migrationNames = (await readdir(migrationsUrl))
+  .filter((name) => name.endsWith(".sql"))
+  .sort();
 const sql = postgres(databaseUrl);
 
 try {
-  await sql.unsafe(migration);
-  console.log("Applied migration 0001_workflow.sql");
+  for (const migrationName of migrationNames) {
+    const migration = await readFile(new URL(migrationName, migrationsUrl), "utf8");
+    await sql.unsafe(migration);
+    console.log(`Applied migration ${migrationName}`);
+  }
 } finally {
   await sql.end();
 }
