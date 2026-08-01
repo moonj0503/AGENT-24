@@ -213,4 +213,16 @@ describe("GoalConfirmationBridge", () => {
     bridge.later();
     expect(cancelled).toHaveBeenCalledOnce();
   });
+
+  it("cancels a pending Gap intent without snoozing or ignoring its candidate", async () => {
+    const { bridge, cancelled, controller } = setup({ latestInference: inference });
+    await bridge.requestGapStart(vi.fn(async () => undefined));
+
+    expect(bridge.cancelGapStart()).toBe(true);
+    expect(cancelled).toHaveBeenCalledOnce();
+    expect(controller.snooze).not.toHaveBeenCalled();
+    expect(bridge.isIgnored(request.candidateSignature)).toBe(false);
+    expect(getPendingGoalConfirmationSnapshot().pending).toBeUndefined();
+    expect(bridge.cancelGapStart()).toBe(false);
+  });
 });

@@ -46,6 +46,18 @@ describe("desktop observation workflow initialization", () => {
     expect(workflow.session.getSnapshot().status).toBe("STOPPED");
   });
 
+  it("cancels a Gap setup that is still waiting for a Goal", async () => {
+    const persistence = new MemoryObservationPersistence(createDefaultObservationState(0, sessionId));
+    workflow = await createDesktopObservationWorkflow({ persistence, now: () => 1 });
+
+    await workflow.beginGapMode();
+    await workflow.cancelGapMode();
+
+    expect(workflow.session.getSnapshot().status).toBe("STOPPED");
+    expect(workflow.getState()).toMatchObject({ gapIntentPending: false });
+    expect(getDesktopWorkflowState().phase).toBe("OBSERVING");
+  });
+
   it("persists and restores a pending Gap-first intent without creating a backend Gap", async () => {
     const persistence = new MemoryObservationPersistence(createDefaultObservationState(0, sessionId));
     workflow = await createDesktopObservationWorkflow({ persistence, now: () => 1 });

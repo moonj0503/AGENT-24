@@ -215,6 +215,16 @@ export class GoalConfirmationBridge {
     this.ignoreCurrent();
   }
 
+  /** Cancels a requested Gap before a Goal has been confirmed. */
+  cancelGapStart(): boolean {
+    if (!this.deferredGapStart) return false;
+    this.deferredGapStart = undefined;
+    this.dependencies.onDeferredGapStartCancelled?.();
+    this.dependencies.onStateChanged?.();
+    this.clearAndDismiss();
+    return true;
+  }
+
   async requestGapStart(start: () => Promise<void>): Promise<boolean> {
     if (this.deferredGapStart) return false;
     let started = false;

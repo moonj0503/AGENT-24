@@ -22,6 +22,7 @@ export interface DesktopObservationWorkflow {
   getState(): PersistedObservationState;
   start(): void;
   beginGapMode(): Promise<void>;
+  cancelGapMode(): Promise<void>;
   endGapMode(): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;
@@ -124,6 +125,10 @@ async function initialize(options: { persistence?: ObservationPersistence; now?:
       if (session.getSnapshot().status === "PAUSED") session.resume(); else session.start();
       await coordinator.flush();
       await bridge.requestGapStart(activateGap);
+    },
+    cancelGapMode: async () => {
+      if (!bridge.cancelGapStart()) return;
+      await coordinator.flush();
     },
     endGapMode: async () => {
       session.stop();
