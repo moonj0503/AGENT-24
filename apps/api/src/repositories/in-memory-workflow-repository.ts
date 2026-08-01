@@ -1,5 +1,6 @@
 import {
   type ActionPlan,
+  type ActionResult,
   ObservationIngestionResultSchema,
   type ActivityEvent,
   type Checkpoint,
@@ -10,7 +11,7 @@ import {
   type PlannedAction,
   type RecoveryBrief,
 } from "@continuity/contracts";
-import type { StoredGoalInference, WorkflowRepository } from "./workflow-repository.js";
+import type { StoredGapAction, StoredGoalInference, WorkflowRepository } from "./workflow-repository.js";
 
 export class InMemoryWorkflowRepository implements WorkflowRepository {
   private readonly eventsByWorkSession = new Map<string, Map<string, ActivityEvent>>();
@@ -19,7 +20,9 @@ export class InMemoryWorkflowRepository implements WorkflowRepository {
   private readonly checkpoints = new Map<string, Checkpoint>();
   private readonly gapSessions = new Map<string, GapSession>();
   private readonly actionsByGap = new Map<string, Map<string, PlannedAction>>();
+  private readonly decisionsByGap = new Map<string, Map<string, { decision: "APPROVE" | "REJECT"; reason?: string }>>();
   private readonly recoveryBriefs = new Map<string, RecoveryBrief>();
+  private readonly actionResultsByGap = new Map<string, Map<string, ActionResult>>();
 
   constructor(initial: {
     readonly goals?: readonly Goal[];
@@ -100,15 +103,57 @@ export class InMemoryWorkflowRepository implements WorkflowRepository {
   async updateAction(
     gapId: string,
     action: PlannedAction,
-    _decision?: "APPROVE" | "REJECT",
-    _reason?: string,
+    decision?: "APPROVE" | "REJECT",
+    reason?: string,
   ): Promise<void> {
     const actions = this.actionsByGap.get(gapId) ?? new Map<string, PlannedAction>();
     actions.set(action.actionId, action);
     this.actionsByGap.set(gapId, actions);
+    if (decision) {
+      const decisions = this.decisionsByGap.get(gapId) ?? new Map();
+      decisions.set(action.actionId, { decision, ...(reason ? { reason } : {}) });
+      this.decisionsByGap.set(gapId, decisions);
+    }
+  }
+
+  async saveActionResult(gapId: string, result: ActionResult): Promise<void> {
+    const results = this.actionResultsByGap.get(gapId) ?? new Map<string, ActionResult>();
+    results.set(result.actionId, result);
+    this.actionResultsByGap.set(gapId, results);
+  }
+
+  async listGapActions(gapId: string): Promise<readonly StoredGapAction[]> {
+    const actions = this.actionsByGap.get(gapId);
+    const results = this.actionResultsByGap.get(gapId);
+    const decisions = this.decisionsByGap.get(gapId);
+    return [...(actions?.values() ?? [])].map((action) => {
+      const decision = decisions?.get(action.actionId);
+      const result = results?.get(action.actionId);
+
+      return {
+        action,
+        ...(decision
+          ? {
+              decision: decision.decision,
+              ...(decision.reason ? { decisionReason: decision.reason } : {}),
+            }
+          : {}),
+        ...(result ? { result } : {}),
+      };
+    });
   }
 
   async saveRecoveryBrief(recoveryBrief: RecoveryBrief): Promise<void> {
     this.recoveryBriefs.set(recoveryBrief.briefId, recoveryBrief);
+  }
+
+  async getRecoveryBrief(gapId: string): Promise<RecoveryBrief | null> {
+    return [...this.recoveryBriefs.values()].find((brief) => brief.gapId === gapId) ?? null;
+  }
+
+  async listGapSessions(status?: GapSession["status"]): Promise<readonly GapSession[]> {
+    return [...this.gapSessions.values()]
+      .filter((gapSession) => !status || gapSession.status === status)
+      .sort((left, right) => right.startedAt.localeCompare(left.startedAt));
   }
 }

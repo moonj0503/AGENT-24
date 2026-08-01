@@ -1,6 +1,7 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import {
   activityEvents,
+  actionResults,
   actionPlans,
   checkpoints,
   gapActions,
@@ -12,6 +13,7 @@ import {
 } from "@continuity/db";
 import {
   ActionPlanSchema,
+  ActionResultSchema,
   CheckpointSchema,
   GapSessionSchema,
   GoalInferenceResultSchema,
@@ -21,6 +23,7 @@ import {
   RecoveryBriefSchema,
   type ActivityEvent,
   type ActionPlan,
+  type ActionResult,
   type Checkpoint,
   type GapSession,
   type Goal,
@@ -29,7 +32,7 @@ import {
   type PlannedAction,
   type RecoveryBrief,
 } from "@continuity/contracts";
-import type { StoredGoalInference, WorkflowRepository } from "./workflow-repository.js";
+import type { StoredGapAction, StoredGoalInference, WorkflowRepository } from "./workflow-repository.js";
 
 export class DrizzleWorkflowRepository implements WorkflowRepository {
   constructor(private readonly db: Database) {}
@@ -161,15 +164,7 @@ export class DrizzleWorkflowRepository implements WorkflowRepository {
   async getGapSession(gapId: string): Promise<GapSession | null> {
     const [row] = await this.db.select().from(gapSessions).where(eq(gapSessions.gapId, gapId)).limit(1);
     if (!row) return null;
-    return GapSessionSchema.parse({
-      gapId: row.gapId,
-      workSessionId: row.workSessionId,
-      goalId: row.goalId,
-      checkpointId: row.checkpointId,
-      status: row.status,
-      startedAt: row.startedAt.toISOString(),
-      ...(row.endedAt ? { endedAt: row.endedAt.toISOString() } : {}),
-    });
+    return this.parseGapSession(row);
   }
 
   async saveActionPlan(actionPlan: ActionPlan): Promise<void> {
@@ -214,6 +209,34 @@ export class DrizzleWorkflowRepository implements WorkflowRepository {
     }).where(and(eq(gapActions.gapId, gapId), eq(gapActions.actionId, action.actionId)));
   }
 
+  async saveActionResult(gapId: string, result: ActionResult): Promise<void> {
+    await this.db.insert(actionResults).values({
+      gapId,
+      actionId: result.actionId,
+      resultData: result,
+    }).onConflictDoUpdate({
+      target: [actionResults.gapId, actionResults.actionId],
+      set: { resultData: result },
+    });
+  }
+
+  async listGapActions(gapId: string): Promise<readonly StoredGapAction[]> {
+    const [actions, results] = await Promise.all([
+      this.db.select().from(gapActions).where(eq(gapActions.gapId, gapId)),
+      this.db.select().from(actionResults).where(eq(actionResults.gapId, gapId)),
+    ]);
+    const resultsByActionId = new Map(results.map((row) => [
+      row.actionId,
+      ActionResultSchema.parse(row.resultData),
+    ]));
+    return actions.map((row) => ({
+      action: PlannedActionSchema.parse(row.actionData),
+      ...((row.decision === "APPROVE" || row.decision === "REJECT") ? { decision: row.decision } : {}),
+      ...(row.decisionReason ? { decisionReason: row.decisionReason } : {}),
+      ...(resultsByActionId.get(row.actionId) ? { result: resultsByActionId.get(row.actionId) } : {}),
+    }));
+  }
+
   async saveRecoveryBrief(recoveryBrief: RecoveryBrief): Promise<void> {
     await this.db.insert(recoveryBriefs).values({
       briefId: recoveryBrief.briefId,
@@ -222,6 +245,34 @@ export class DrizzleWorkflowRepository implements WorkflowRepository {
     }).onConflictDoUpdate({
       target: recoveryBriefs.briefId,
       set: { gapId: recoveryBrief.gapId, briefData: recoveryBrief },
+    });
+  }
+
+  async getRecoveryBrief(gapId: string): Promise<RecoveryBrief | null> {
+    const [row] = await this.db.select({ briefData: recoveryBriefs.briefData })
+      .from(recoveryBriefs)
+      .where(eq(recoveryBriefs.gapId, gapId))
+      .orderBy(desc(recoveryBriefs.createdAt))
+      .limit(1);
+    return row ? RecoveryBriefSchema.parse(row.briefData) : null;
+  }
+
+  async listGapSessions(status?: GapSession["status"]): Promise<readonly GapSession[]> {
+    const rows = status
+      ? await this.db.select().from(gapSessions).where(eq(gapSessions.status, status)).orderBy(desc(gapSessions.startedAt))
+      : await this.db.select().from(gapSessions).orderBy(desc(gapSessions.startedAt));
+    return rows.map((row) => this.parseGapSession(row));
+  }
+
+  private parseGapSession(row: typeof gapSessions.$inferSelect): GapSession {
+    return GapSessionSchema.parse({
+      gapId: row.gapId,
+      workSessionId: row.workSessionId,
+      goalId: row.goalId,
+      checkpointId: row.checkpointId,
+      status: row.status,
+      startedAt: row.startedAt.toISOString(),
+      ...(row.endedAt ? { endedAt: row.endedAt.toISOString() } : {}),
     });
   }
 }

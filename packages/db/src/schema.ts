@@ -67,6 +67,13 @@ export const recoveryBriefs = pgTable("recovery_briefs", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const actionResults = pgTable("action_results", {
+  gapId: text("gap_id").notNull(),
+  actionId: text("action_id").notNull(),
+  resultData: jsonb("result_data").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [primaryKey({ columns: [table.gapId, table.actionId] })]);
+
 export const idempotencyRecords = pgTable("idempotency_records", {
   idempotencyKey: text("idempotency_key").primaryKey(),
   fingerprint: text("fingerprint").notNull(),
@@ -87,5 +94,6 @@ export const dbSchema = {
   actionPlans,
   gapActions,
   recoveryBriefs,
+  actionResults,
   idempotencyRecords,
 };
