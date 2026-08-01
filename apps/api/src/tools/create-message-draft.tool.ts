@@ -1,0 +1,3 @@
+import { failed, readString, type ContinuityTool } from "./tool-result.js";
+
+export const createMessageDraftTool: ContinuityTool = { name: "CREATE_MESSAGE_DRAFT", async execute(input) { try { const actionId = readString(input, "actionId"); return { status: "SUCCESS", effect: { type: "MESSAGE_DRAFT_CREATED", resourceId: `message-${actionId}` }, reversible: true, rollbackToken: `message-${actionId}`, summary: "Created a message draft without sending it.", value: { subject: readString(input, "title"), body: readString(input, "reason"), status: "DRAFT" } }; } catch (error) { return failed(error); } } };

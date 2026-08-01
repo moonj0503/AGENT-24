@@ -1,0 +1,4 @@
+import { CheckpointSchema } from "@continuity/contracts";
+import { failed, readString, type ContinuityTool } from "./tool-result.js";
+
+export const createCheckpointTool: ContinuityTool = { name: "CREATE_CHECKPOINT", async execute(input, context) { try { const actionId = readString(input, "actionId"); const value = CheckpointSchema.parse({ checkpointId: `checkpoint-${actionId}`, goalId: readString(input, "goalId"), currentState: readString(input, "currentState"), completedSincePrevious: [], openQuestions: [], likelyNextActions: [{ title: readString(input, "nextAction"), estimatedMinutes: 10 }], relatedResources: [], confidence: 1, createdAt: (context?.now?.() ?? new Date()).toISOString() }); return { status: "SUCCESS", effect: { type: "CHECKPOINT_CREATED", resourceId: value.checkpointId }, reversible: true, rollbackToken: value.checkpointId, summary: "Created a continuity checkpoint.", value }; } catch (error) { return failed(error); } } };
