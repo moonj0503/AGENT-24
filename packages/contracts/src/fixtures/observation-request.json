@@ -1,0 +1,13 @@
+{
+  "workSessionId": "ws-001",
+  "events": [
+    {
+      "eventId": "evt-001",
+      "type": "ACTIVE_WINDOW_CHANGED",
+      "occurredAt": "2026-08-01T09:00:00.000Z",
+      "application": { "name": "Microsoft Word", "category": "DOCUMENT" },
+      "resource": { "title": "Final Project Report.docx", "kind": "DOCUMENT" },
+      "metadata": { "idleSeconds": 0 }
+    }
+  ]
+}

@@ -16,6 +16,10 @@ The goal is to distinguish three different situations:
 
 This document records findings only. It does not change the existing shared schemas.
 
+## Follow-up after the audit
+
+The API request schemas described in the audit have now been added in `packages/contracts/src/http.ts` and exported from `packages/contracts/src/index.ts`. Request examples were added to `packages/contracts/src/fixtures`, and schema tests were added to `packages/contracts/tests/http.test.ts`.
+
 ## Existing schema-to-fixture coverage
 
 | Schema | Fixture | Result | Notes |
@@ -53,18 +57,18 @@ confirmed Goal
 
 Without these fixtures, Member 2 and Member 4 will have to invent response shapes independently, which creates integration risk.
 
-### 3. API request contracts are not yet represented
+### 3. API request contracts are now represented
 
-The domain schemas mostly describe stored or returned objects. They do not yet define the request bodies for:
+The request body schemas are now defined for:
 
 - `POST /observations`
 - `POST /goal-inferences`
-- `POST /goals/:goalId/confirm`
+- `POST /goals/confirm`
 - `POST /gaps`
 - `POST /gaps/:gapId/actions/:actionId/approval`
 - `POST /gaps/:gapId/end`
 
-The HTTP document names these endpoints, but the exact request JSON and validation rules still need to be encoded in `packages/contracts`.
+The exact request examples are documented in `docs/contracts/http-and-sse.md`. Goal confirmation now uses `POST /goals/confirm`, so both inferred and manually entered goals can be represented by the request body alone.
 
 ### 4. SSE payload is under-specified
 
@@ -117,7 +121,7 @@ ConfirmGoalRequest.candidateId
 
 These are the next tasks after this audit, in priority order:
 
-1. Add request schemas and common error schema.
+1. Add a common error schema.
 2. Add missing fixtures for `Goal`, `Checkpoint`, `ActionResult`, and `AgentEvent`.
 3. Add a policy evaluation result schema and fixture.
 4. Make SSE payloads event-specific or define a documented payload mapping.
