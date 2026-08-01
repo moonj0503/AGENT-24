@@ -12,6 +12,12 @@ import {
   ObservationIngestionResultSchema,
   ObservationRequestSchema,
   StartGapRequestSchema,
+  RunGapRecoveryParamsSchema,
+  RunGapRecoveryRequestSchema,
+  RunGapRecoveryResponseSchema,
+  ActionPlanSchema,
+  ActionResultSchema,
+  RecoveryBriefSchema,
 } from "../src/index.js";
 
 const fixture = (name: string) => JSON.parse(readFileSync(
@@ -47,5 +53,25 @@ describe("HTTP request contracts", () => {
     expect(EndGapParamsSchema.safeParse({ gapId: "gap-001" }).success).toBe(true);
     expect(IdempotencyKeySchema.safeParse("demo-request-001").success).toBe(true);
     expect(IdempotencyKeySchema.safeParse("").success).toBe(false);
+  });
+
+  it("validates the confirmed-gap runtime request and response", () => {
+    expect(RunGapRecoveryParamsSchema.safeParse({ gapId: "gap-001" }).success).toBe(true);
+    expect(RunGapRecoveryRequestSchema.safeParse({
+      goalId: "goal-001",
+      checkpointId: "checkpoint-001",
+    }).success).toBe(true);
+    expect(RunGapRecoveryRequestSchema.safeParse({ goalId: "goal-001" }).success).toBe(false);
+    expect(RunGapRecoveryResponseSchema.safeParse({
+      actionPlan: ActionPlanSchema.parse(fixture("action-plan.json")),
+      actionResults: [ActionResultSchema.parse({
+        actionId: "act-001",
+        status: "COMPLETED",
+        summary: "TODO draft created.",
+        externalEffect: "NONE",
+        occurredAt: "2026-08-01T09:30:00.000Z",
+      })],
+      recoveryBrief: RecoveryBriefSchema.parse(fixture("recovery-brief.json")),
+    }).success).toBe(true);
   });
 });

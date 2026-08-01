@@ -7,6 +7,7 @@ import {
 } from "@continuity/db";
 import {
   GoalInferenceResultSchema,
+  GoalSchema,
   ObservationIngestionResultSchema,
   type ActivityEvent,
   type Goal,
@@ -89,5 +90,25 @@ export class DrizzleWorkflowRepository implements WorkflowRepository {
         confidence: goal.confidence,
       },
     });
+  }
+
+  async getGoal(goalId: string): Promise<Goal | null> {
+    const [row] = await this.db.select({
+      goalId: goals.goalId,
+      title: goals.title,
+      path: goals.path,
+      status: goals.status,
+      source: goals.source,
+      confidence: goals.confidence,
+    }).from(goals).where(eq(goals.goalId, goalId)).limit(1);
+    return row ? GoalSchema.parse(row) : null;
+  }
+
+  async getCheckpoint(_checkpointId: string): Promise<null> {
+    return null;
+  }
+
+  async getGapSession(_gapId: string): Promise<null> {
+    return null;
   }
 }

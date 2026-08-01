@@ -15,6 +15,7 @@ export async function startServer(environment: NodeJS.ProcessEnv = process.env):
   });
   const app = buildApp({
     workflowService: dependencies.workflowService,
+    gapRecoveryService: dependencies.gapRecoveryService,
     idempotencyStore: new DrizzleIdempotencyStore(db),
   });
   await app.listen({ host, port });

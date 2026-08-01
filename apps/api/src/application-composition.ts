@@ -7,10 +7,16 @@ import {
   createWorkflowService,
   type WorkflowService,
 } from "./services/workflow-service.js";
+import {
+  createGapRecoveryService,
+  type Clock,
+  type GapRecoveryService,
+} from "./services/gap-recovery-service.js";
 
 export interface ApplicationDependencies {
   readonly workflowService: WorkflowService;
   readonly agentBundle: AgentRuntimeBundle;
+  readonly gapRecoveryService: GapRecoveryService;
 }
 
 export interface ApplicationCompositionOptions {
@@ -18,6 +24,7 @@ export interface ApplicationCompositionOptions {
   readonly createAgentRuntimeBundle?: (
     environment: NodeJS.ProcessEnv,
   ) => AgentRuntimeBundle;
+  readonly clock?: Clock;
 }
 
 export function createApplicationDependencies(
@@ -31,6 +38,11 @@ export function createApplicationDependencies(
     workflowService: createWorkflowService(
       options.workflowRepository,
       agentBundle.goalInterpreter,
+    ),
+    gapRecoveryService: createGapRecoveryService(
+      options.workflowRepository,
+      agentBundle.runtime,
+      options.clock,
     ),
   };
 }
