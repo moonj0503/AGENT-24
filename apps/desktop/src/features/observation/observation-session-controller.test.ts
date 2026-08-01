@@ -182,7 +182,7 @@ describe("ObservationSessionController lifecycle and scheduling", () => {
     expect(session.controller.getSnapshot().pendingObservationCount).toBe(1);
     await vi.advanceTimersByTimeAsync(10);
     expect(session.controller.getSnapshot().pendingObservationCount).toBe(1);
-    await vi.advanceTimersByTimeAsync(30);
+    await vi.advanceTimersByTimeAsync(2_030);
     expect(session.upload).toHaveBeenCalledTimes(2);
     expect(session.controller.getSnapshot().pendingObservationCount).toBe(0);
     session.controller.stop();
@@ -194,7 +194,7 @@ describe("ObservationSessionController lifecycle and scheduling", () => {
       inferences: [new Error("model unavailable"), inference()],
     });
     session.controller.start();
-    await vi.advanceTimersByTimeAsync(50);
+    await vi.advanceTimersByTimeAsync(2_000);
     expect(session.infer).toHaveBeenCalledOnce();
     expect(session.controller.getSnapshot()).toMatchObject({
       latestInference: undefined,

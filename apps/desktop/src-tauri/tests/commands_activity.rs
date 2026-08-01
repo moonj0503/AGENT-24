@@ -14,3 +14,15 @@ fn blocked_poll_neither_returns_nor_persists_an_event() {
     assert!(state.poll().unwrap().is_none());
     assert!(state.recent(10).unwrap().is_empty());
 }
+
+#[test]
+fn user_blocked_application_neither_returns_nor_persists_an_event() {
+    let state = ObserverState::for_test(RawWindowSnapshot {
+        application_name: "Private Writer".into(),
+        window_title: "Redacted by native privacy".into(),
+        idle_seconds: 0,
+    });
+    state.set_user_blocked_applications(vec!["private writer".into()]);
+    assert!(state.poll().unwrap().is_none());
+    assert!(state.recent(10).unwrap().is_empty());
+}

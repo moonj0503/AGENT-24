@@ -32,6 +32,7 @@ import {
   GOAL_CONFIRMATION_REQUESTED_EVENT,
   type GoalConfirmationRequested,
 } from "./types";
+import { localDate, type PersistedObservationState } from "./persistence";
 
 export const DEFAULT_CONFIRMATION_SNOOZE_MS = 30 * 60_000;
 
@@ -41,6 +42,7 @@ export interface ConfirmationBridgeDependencies {
   readonly now: () => number;
   readonly snoozeDurationMs: number;
   readonly onError: (message: string) => void;
+  readonly onStateChanged?: () => void;
 }
 
 function parsedRequest(value: unknown): GoalConfirmationRequested | undefined {
@@ -74,11 +76,21 @@ export class GoalConfirmationBridge {
   private windowListener?: (event: Event) => void;
   private nativeUnsubscribes: Array<() => void> = [];
 
-  constructor(private readonly dependencies: ConfirmationBridgeDependencies) {}
+  constructor(private readonly dependencies: ConfirmationBridgeDependencies, initial?: PersistedObservationState) {
+    this.snoozedUntil = initial?.snoozedUntil;
+    const today = localDate(dependencies.now());
+    initial?.ignoredCandidates.filter((item) => item.ignoredOn === today).forEach((item) => this.ignoredSignatures.add(item.signature));
+    if (this.snoozedUntil && this.snoozedUntil > dependencies.now()) dependencies.controller.snooze();
+  }
 
   async start(): Promise<() => void> {
     if (this.started) return () => undefined;
     this.started = true;
+    if (this.snoozedUntil !== undefined) {
+      const remaining = this.snoozedUntil - this.dependencies.now();
+      if (remaining > 0) this.snoozeTimer = setTimeout(() => this.expireSnooze(), remaining);
+      else this.expireSnooze();
+    }
     this.windowListener = (event) => {
       const request = parsedRequest((event as CustomEvent<unknown>).detail);
       if (request) void this.requestConfirmation(request);
@@ -164,11 +176,10 @@ export class GoalConfirmationBridge {
     this.dependencies.controller.snooze();
     if (this.snoozeTimer !== undefined) clearTimeout(this.snoozeTimer);
     this.snoozeTimer = setTimeout(() => {
-      this.snoozedUntil = undefined;
-      this.snoozeTimer = undefined;
-      this.dependencies.controller.clearSnooze();
+      this.expireSnooze();
     }, this.dependencies.snoozeDurationMs);
     this.deferredGapStart = undefined;
+    this.dependencies.onStateChanged?.();
     this.clearAndDismiss();
   }
 
@@ -176,6 +187,7 @@ export class GoalConfirmationBridge {
     const signature = getPendingGoalConfirmationSnapshot().pending?.candidateSignature;
     if (signature) this.ignoredSignatures.add(signature);
     this.deferredGapStart = undefined;
+    this.dependencies.onStateChanged?.();
     this.clearAndDismiss();
   }
 
@@ -216,12 +228,20 @@ export class GoalConfirmationBridge {
     return this.ignoredSignatures.has(signature);
   }
 
+  getPersistentFields(): Pick<PersistedObservationState, "snoozedUntil" | "ignoredCandidates"> {
+    return {
+      snoozedUntil: this.snoozedUntil,
+      ignoredCandidates: [...this.ignoredSignatures].map((signature) => ({ signature, ignoredOn: localDate(this.dependencies.now()) })),
+    };
+  }
+
   private async completeConfirmation(goal: Goal): Promise<Goal> {
     setConfirmedGoal(goal);
     this.dependencies.controller.clearSnooze();
     this.snoozedUntil = undefined;
     if (this.snoozeTimer !== undefined) clearTimeout(this.snoozeTimer);
     this.snoozeTimer = undefined;
+    this.dependencies.onStateChanged?.();
     this.clearAndDismiss();
     const start = this.deferredGapStart;
     this.deferredGapStart = undefined;
@@ -238,5 +258,12 @@ export class GoalConfirmationBridge {
   private clearAndDismiss(): void {
     clearPendingGoalConfirmation();
     dismissOverlay();
+  }
+
+  private expireSnooze(): void {
+    this.snoozedUntil = undefined;
+    this.snoozeTimer = undefined;
+    this.dependencies.controller.clearSnooze();
+    this.dependencies.onStateChanged?.();
   }
 }

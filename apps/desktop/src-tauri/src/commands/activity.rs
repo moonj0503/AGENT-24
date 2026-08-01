@@ -13,6 +13,7 @@ pub struct ObserverState {
     session: Mutex<ObserverSession>,
     mock_enabled: AtomicBool,
     test_snapshot: Mutex<Option<RawWindowSnapshot>>,
+    user_blocked_applications: Mutex<Vec<String>>,
 }
 
 #[tauri::command]
@@ -35,6 +36,26 @@ pub fn set_mock_observer(enabled: bool, state: tauri::State<'_, ObserverState>) 
     state.set_mock_enabled(enabled);
 }
 
+#[tauri::command]
+pub fn load_observation_state(state: tauri::State<'_, ObserverState>) -> Result<Option<serde_json::Value>, String> {
+    state.repository.load_observation_state().map_err(|_| "observation state could not be loaded".to_owned())
+}
+
+#[tauri::command]
+pub fn save_observation_state(value: serde_json::Value, state: tauri::State<'_, ObserverState>) -> Result<(), String> {
+    state.repository.save_observation_state(&value).map_err(|_| "observation state could not be saved".to_owned())
+}
+
+#[tauri::command]
+pub fn clear_observation_state(state: tauri::State<'_, ObserverState>) -> Result<(), String> {
+    state.repository.clear_observation_state().map_err(|_| "observation state could not be cleared".to_owned())
+}
+
+#[tauri::command]
+pub fn set_user_blocked_applications(applications: Vec<String>, state: tauri::State<'_, ObserverState>) {
+    state.set_user_blocked_applications(applications);
+}
+
 impl ObserverState {
     pub fn new(repository: ActivityRepository) -> Self {
         Self {
@@ -42,6 +63,7 @@ impl ObserverState {
             session: Mutex::new(ObserverSession::new(300)),
             mock_enabled: AtomicBool::new(false),
             test_snapshot: Mutex::new(None),
+            user_blocked_applications: Mutex::new(Vec::new()),
         }
     }
 
@@ -56,6 +78,10 @@ impl ObserverState {
         let Some(snapshot) = raw.and_then(sanitize_snapshot) else {
             return Ok(None);
         };
+        if self.user_blocked_applications.lock().map_err(|_| "privacy settings lock poisoned".to_owned())?
+            .iter().any(|blocked| snapshot.application_name.trim().to_lowercase() == *blocked) {
+            return Ok(None);
+        }
 
         let event = self
             .session
@@ -74,6 +100,11 @@ impl ObserverState {
 
     pub fn set_mock_enabled(&self, enabled: bool) {
         self.mock_enabled.store(enabled, Ordering::Relaxed);
+    }
+
+    pub fn set_user_blocked_applications(&self, applications: Vec<String>) {
+        *self.user_blocked_applications.lock().expect("privacy settings lock poisoned") = applications
+            .into_iter().map(|value| value.trim().to_lowercase()).filter(|value| !value.is_empty()).collect();
     }
 
     fn read_snapshot(&self) -> Result<Option<RawWindowSnapshot>, String> {

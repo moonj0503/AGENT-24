@@ -13,6 +13,10 @@ pub fn initialize(connection: &Connection) -> Result<()> {
             resource_kind TEXT,
             idle_seconds INTEGER NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS observation_workflow_state (
+            singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+            state_json TEXT NOT NULL
+        );
         ",
     )
 }

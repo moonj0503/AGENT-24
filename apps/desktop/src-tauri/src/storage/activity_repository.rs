@@ -100,6 +100,31 @@ impl ActivityRepository {
             .collect::<Result<Vec<_>>>()?;
         Ok(events)
     }
+
+    pub fn load_observation_state(&self) -> Result<Option<serde_json::Value>> {
+        let connection = self.connection.lock().expect("activity database lock poisoned");
+        let mut statement = connection.prepare("SELECT state_json FROM observation_workflow_state WHERE singleton = 1")?;
+        let mut rows = statement.query([])?;
+        let Some(row) = rows.next()? else { return Ok(None); };
+        let json: String = row.get(0)?;
+        Ok(serde_json::from_str(&json).ok())
+    }
+
+    pub fn save_observation_state(&self, state: &serde_json::Value) -> Result<()> {
+        let json = serde_json::to_string(state).expect("serialize validated observation state");
+        let connection = self.connection.lock().expect("activity database lock poisoned");
+        connection.execute(
+            "INSERT INTO observation_workflow_state (singleton, state_json) VALUES (1, ?1) ON CONFLICT(singleton) DO UPDATE SET state_json = excluded.state_json",
+            params![json],
+        )?;
+        Ok(())
+    }
+
+    pub fn clear_observation_state(&self) -> Result<()> {
+        let connection = self.connection.lock().expect("activity database lock poisoned");
+        connection.execute("DELETE FROM observation_workflow_state WHERE singleton = 1", [])?;
+        Ok(())
+    }
 }
 
 fn event_type_name(event_type: &ActivityEventType) -> &'static str {
