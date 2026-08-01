@@ -20,7 +20,7 @@ export async function loadFrozenRecoveryBriefFixture(): Promise<unknown> {
 export class FixtureRecoveryGenerator implements RecoveryGenerator {
   constructor(private readonly loadFixture: FixtureLoader = loadFrozenRecoveryBriefFixture) {}
 
-  async run(_input: RecoveryContext): Promise<RecoveryBrief> {
+  async run(input: RecoveryContext): Promise<RecoveryBrief> {
     const fixture = await this.loadFixture();
     const result = RecoveryBriefSchema.safeParse(fixture);
 
@@ -31,6 +31,11 @@ export class FixtureRecoveryGenerator implements RecoveryGenerator {
       );
     }
 
-    return result.data;
+    return RecoveryBriefSchema.parse({
+      ...result.data,
+      briefId: `brief-${input.gapSession.gapId}`,
+      gapId: input.gapSession.gapId,
+      goalBeforeGap: input.goal.path.join(" → "),
+    });
   }
 }
