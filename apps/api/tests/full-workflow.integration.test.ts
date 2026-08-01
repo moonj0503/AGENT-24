@@ -1,0 +1,34 @@
+import { expect, it } from "vitest";
+import { buildApp } from "../src/app.js";
+import { createApplicationDependencies } from "../src/application-composition.js";
+import { InMemoryWorkflowRepository } from "../src/repositories/in-memory-workflow-repository.js";
+
+it("completes the fixture-provider workflow through real routes, services, runtime, repository, recovery, and history", async () => {
+  const dependencies = createApplicationDependencies({ AGENT_PROVIDER: "fixture" }, { workflowRepository: new InMemoryWorkflowRepository() });
+  const app = buildApp(dependencies);
+  const post = (url: string, key: string, payload: Record<string, unknown>) => app.inject({ method: "POST", url, headers: { "idempotency-key": key }, payload });
+  const observation = await post("/api/v1/observations", "e2e-observation", { workSessionId: "e2e-session", events: [{ eventId: "e2e-event", type: "ACTIVE_WINDOW_CHANGED", occurredAt: "2026-08-02T00:00:00.000Z", application: { name: "Writer", category: "DOCUMENT" }, resource: { title: "Project report", kind: "DOCUMENT" }, metadata: { idleSeconds: 0 } }] });
+  expect(observation.statusCode).toBe(201);
+  const inference = await post("/api/v1/goal-inferences", "e2e-inference", { workSessionId: "e2e-session", observationEventIds: ["e2e-event"] });
+  expect(inference.statusCode).toBe(200);
+  const inferenceBody = inference.json();
+  const goal = await post("/api/v1/goals/confirm", "e2e-goal", { inferenceId: inferenceBody.inferenceId, selection: { type: "CANDIDATE", candidateId: inferenceBody.candidates[0].candidateId } });
+  expect(goal.statusCode).toBe(201);
+  const goalBody = goal.json();
+  const checkpoint = await post("/api/v1/checkpoints", "e2e-checkpoint", { goalId: goalBody.goalId, currentState: inferenceBody.inferenceSummary, completedSincePrevious: [], openQuestions: [], likelyNextActions: [{ title: `Resume ${goalBody.title}`, estimatedMinutes: 10 }], relatedResources: [], confidence: goalBody.confidence });
+  expect(checkpoint.statusCode).toBe(201);
+  const checkpointBody = checkpoint.json();
+  const gap = await post("/api/v1/gaps", "e2e-gap", { workSessionId: "e2e-session", goalId: goalBody.goalId, checkpointId: checkpointBody.checkpointId });
+  expect(gap.statusCode).toBe(201);
+  const gapBody = gap.json();
+  const runtime = await post(`/api/v1/gaps/${gapBody.gapId}/run`, "e2e-run", { goalId: goalBody.goalId, checkpointId: checkpointBody.checkpointId });
+  expect(runtime.statusCode).toBe(200);
+  expect(runtime.json()).toMatchObject({ actionPlan: { gapId: gapBody.gapId }, recoveryBrief: { gapId: gapBody.gapId } });
+  const ended = await post(`/api/v1/gaps/${gapBody.gapId}/end`, "e2e-end", { reason: "User returned." });
+  expect(ended.json()).toMatchObject({ gapId: gapBody.gapId, status: "COMPLETED" });
+  const recovery = await app.inject({ method: "GET", url: `/api/v1/gaps/${gapBody.gapId}/recovery-brief` });
+  expect(recovery.json()).toMatchObject({ gapId: gapBody.gapId });
+  const history = await app.inject({ method: "GET", url: "/api/v1/gaps" });
+  expect(history.json()).toMatchObject({ items: [{ gapSession: { gapId: gapBody.gapId, status: "COMPLETED" } }] });
+  await app.close();
+});

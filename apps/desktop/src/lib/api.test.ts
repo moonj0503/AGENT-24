@@ -37,4 +37,11 @@ describe("apiRequest", () => {
     }));
     await expect(apiRequest("/goals/missing")).rejects.toBeInstanceOf(ApiError);
   });
+
+  it("uses an explicit idempotency key without changing the mutation default", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ ok: true }));
+    vi.stubGlobal("fetch", fetchMock);
+    await apiRequest("/observations", { method: "POST", body: "{}" }, "observation:stable");
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({ "idempotency-key": "observation:stable" });
+  });
 });

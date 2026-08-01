@@ -7,6 +7,9 @@ import type {
   ObservationSessionSnapshot,
   ObservationSessionStatus,
 } from "./types";
+import type { PersistedObservationState } from "./persistence";
+import { boundedObservationQueue, type QueueLimits, DEFAULT_QUEUE_LIMITS } from "./queue";
+import { ExponentialBackoff } from "./backoff";
 
 export const DEFAULT_OBSERVATION_SESSION_CONFIG: ObservationSessionConfig = Object.freeze({
   observationIntervalMs: 3_000,
@@ -37,6 +40,7 @@ export class ObservationSessionController {
   private lastObservationSignature?: string;
   private readonly pendingObservations = new Map<string, ActivityEvent>();
   private readonly pendingInferenceEventIds = new Set<string>();
+  private readonly uploadedObservationEventIds = new Set<string>();
   private latestInference?: GoalInferenceResult;
   private topCandidateSignature?: string;
   private candidateConfidence?: number;
@@ -44,18 +48,40 @@ export class ObservationSessionController {
   private lastInferenceAt?: number;
   private lastPopupAt?: number;
   private snoozed = false;
+  private uploadRetryAt = 0;
+  private inferenceRetryAt = 0;
+  private readonly uploadBackoff = new ExponentialBackoff();
+  private readonly inferenceBackoff = new ExponentialBackoff();
 
   constructor(
     private readonly workSessionId: string,
     private readonly dependencies: ObservationSessionDependencies,
     private readonly config: ObservationSessionConfig = DEFAULT_OBSERVATION_SESSION_CONFIG,
-  ) {}
+    initial?: PersistedObservationState,
+    private readonly queueLimits: QueueLimits = DEFAULT_QUEUE_LIMITS,
+  ) {
+    if (initial) {
+      const restoredQueue = boundedObservationQueue(initial.pendingObservations, dependencies.now(), queueLimits);
+      for (const event of restoredQueue.events) this.pendingObservations.set(event.eventId, event);
+      if (restoredQueue.trimmed) dependencies.onWarning?.("The local observation queue reached its limit.");
+      for (const id of initial.pendingInferenceEventIds) this.pendingInferenceEventIds.add(id);
+      for (const id of initial.uploadedObservationEventIds) this.uploadedObservationEventIds.add(id);
+      this.latestInference = initial.latestInference;
+      this.topCandidateSignature = initial.candidateSignature;
+      this.consecutiveCandidateCount = initial.consecutiveCandidateCount;
+      this.lastInferenceAt = initial.lastInferenceAt;
+      this.lastPopupAt = initial.lastPopupAt;
+      this.snoozed = initial.snoozedUntil !== undefined && initial.snoozedUntil > dependencies.now();
+      this.status = initial.observationStatus === "PAUSED" ? "PAUSED" : "STOPPED";
+    }
+  }
 
   start(): void {
     if (this.status !== "STOPPED") return;
     this.status = "RUNNING";
     this.generation += 1;
     this.schedule();
+    this.dependencies.onStateChanged?.(true);
   }
 
   pause(): void {
@@ -63,6 +89,7 @@ export class ObservationSessionController {
     this.status = "PAUSED";
     this.generation += 1;
     this.clearTimers();
+    this.dependencies.onStateChanged?.(true);
   }
 
   resume(): void {
@@ -70,6 +97,12 @@ export class ObservationSessionController {
     this.status = "RUNNING";
     this.generation += 1;
     this.schedule();
+    this.dependencies.onStateChanged?.(true);
+  }
+
+  shutdown(): void {
+    this.generation += 1;
+    this.clearTimers();
   }
 
   stop(): void {
@@ -79,6 +112,7 @@ export class ObservationSessionController {
     this.clearTimers();
     this.pendingObservations.clear();
     this.pendingInferenceEventIds.clear();
+    this.uploadedObservationEventIds.clear();
     this.latestInference = undefined;
     this.topCandidateSignature = undefined;
     this.candidateConfidence = undefined;
@@ -91,10 +125,31 @@ export class ObservationSessionController {
 
   snooze(): void {
     this.snoozed = true;
+    this.dependencies.onStateChanged?.(true);
   }
 
   clearSnooze(): void {
     this.snoozed = false;
+    this.dependencies.onStateChanged?.(true);
+  }
+
+  restoreRunningPreference(): void {
+    if (this.status === "PAUSED") return;
+    this.start();
+  }
+
+  getPersistentFields(): Pick<PersistedObservationState, "observationStatus" | "pendingObservations" | "uploadedObservationEventIds" | "pendingInferenceEventIds" | "latestInference" | "candidateSignature" | "consecutiveCandidateCount" | "lastInferenceAt" | "lastPopupAt"> {
+    return {
+      observationStatus: this.status === "PAUSED" ? "PAUSED" : "RUNNING",
+      pendingObservations: [...this.pendingObservations.values()],
+      pendingInferenceEventIds: [...this.pendingInferenceEventIds],
+      uploadedObservationEventIds: [...this.uploadedObservationEventIds].slice(-this.queueLimits.maximumEvents),
+      latestInference: this.latestInference,
+      candidateSignature: this.topCandidateSignature,
+      consecutiveCandidateCount: this.consecutiveCandidateCount,
+      lastInferenceAt: this.lastInferenceAt,
+      lastPopupAt: this.lastPopupAt,
+    };
   }
 
   getSnapshot(): ObservationSessionSnapshot {
@@ -143,10 +198,19 @@ export class ObservationSessionController {
     try {
       const event = await this.dependencies.collectActivity();
       if (!event || !this.isCurrent(generation)) return;
+      if (this.dependencies.isApplicationBlocked?.(event)) return;
       const signature = observationSignature(event);
+      if (this.uploadedObservationEventIds.has(event.eventId)) return;
       if (signature === this.lastObservationSignature) return;
       this.lastObservationSignature = signature;
       this.pendingObservations.set(event.eventId, event);
+      const bounded = boundedObservationQueue([...this.pendingObservations.values()], this.dependencies.now(), this.queueLimits);
+      if (bounded.trimmed) {
+        this.pendingObservations.clear();
+        bounded.events.forEach((item) => this.pendingObservations.set(item.eventId, item));
+        this.dependencies.onWarning?.("The local observation queue reached its limit.");
+      }
+      this.dependencies.onStateChanged?.(false);
     } catch {
       // Observation failures are retried on the next scheduled cycle.
     } finally {
@@ -155,7 +219,7 @@ export class ObservationSessionController {
   }
 
   private async uploadCycle(): Promise<void> {
-    if (this.status !== "RUNNING" || this.uploading || this.pendingObservations.size === 0) {
+    if (this.status !== "RUNNING" || this.uploading || this.pendingObservations.size === 0 || this.dependencies.now() < this.uploadRetryAt) {
       return;
     }
     this.uploading = true;
@@ -168,9 +232,14 @@ export class ObservationSessionController {
         if (!this.pendingObservations.has(eventId)) continue;
         this.pendingObservations.delete(eventId);
         this.pendingInferenceEventIds.add(eventId);
+        this.uploadedObservationEventIds.add(eventId);
       }
+      this.uploadBackoff.reset();
+      this.uploadRetryAt = 0;
+      this.dependencies.onStateChanged?.(true);
     } catch {
-      // Pending observations remain buffered for the next upload cycle.
+      this.uploadRetryAt = this.uploadBackoff.fail(this.dependencies.now());
+      this.dependencies.onWarning?.("Observation upload is temporarily unavailable.");
     } finally {
       this.uploading = false;
     }
@@ -181,6 +250,7 @@ export class ObservationSessionController {
       this.status !== "RUNNING"
       || this.inferring
       || this.pendingInferenceEventIds.size === 0
+      || this.dependencies.now() < this.inferenceRetryAt
     ) {
       return;
     }
@@ -197,8 +267,11 @@ export class ObservationSessionController {
       if (!this.isCurrent(generation)) return;
       for (const eventId of eventIds) this.pendingInferenceEventIds.delete(eventId);
       this.applyInference(inference, this.dependencies.getConfirmedGoal());
+      this.inferenceBackoff.reset();
+      this.inferenceRetryAt = 0;
+      this.dependencies.onStateChanged?.(true);
     } catch {
-      // Keep the previous inference and event IDs so the next cycle can retry.
+      this.inferenceRetryAt = this.inferenceBackoff.fail(this.dependencies.now());
     } finally {
       this.inferring = false;
     }
@@ -218,6 +291,7 @@ export class ObservationSessionController {
     this.topCandidateSignature = signature;
     this.candidateConfidence = candidate.confidence;
     this.lastInferenceAt = this.dependencies.now();
+    this.dependencies.onStateChanged?.(false);
 
     if (evaluateStability({
       candidate,
@@ -233,6 +307,7 @@ export class ObservationSessionController {
       popupCooldownMs: this.config.popupCooldownMs,
     }) === "SHOW_CONFIRMATION") {
       this.lastPopupAt = this.lastInferenceAt;
+      this.dependencies.onStateChanged?.(true);
       this.dependencies.onConfirmationRequested({
         type: "GoalConfirmationRequested",
         inference,

@@ -56,4 +56,7 @@ export interface ObservationSessionDependencies {
   readonly canRequestConfirmation: () => boolean;
   readonly onConfirmationRequested: (event: GoalConfirmationRequested) => void;
   readonly now: () => number;
+  readonly onStateChanged?: (critical: boolean) => void;
+  readonly onWarning?: (message: string) => void;
+  readonly isApplicationBlocked?: (event: ActivityEvent) => boolean;
 }
