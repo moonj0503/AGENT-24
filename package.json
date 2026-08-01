@@ -1,0 +1,15 @@
+{
+  "name": "continuity-agent",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.0.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "turbo build",
+    "dev": "turbo dev",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "typecheck": "turbo typecheck"
+  },
+  "devDependencies": { "turbo": "^2.7.0", "typescript": "^5.9.0", "vitest": "^4.0.0" }
+}

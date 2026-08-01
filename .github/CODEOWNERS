@@ -1,0 +1,9 @@
+/apps/desktop/src-tauri/ @member1
+/apps/desktop/src/ @member2
+/apps/api/src/features/ @member3
+/apps/api/src/plugins/ @member3
+/packages/contracts/ @member3
+/packages/db/ @member3
+/apps/api/src/agents/ @member4
+/apps/api/src/tools/ @member4
+/apps/api/src/policy/ @member4
