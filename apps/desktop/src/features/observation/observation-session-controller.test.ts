@@ -5,7 +5,7 @@ import {
   type ActivityEvent,
   type GoalInferenceResult,
 } from "@continuity/contracts";
-import { ObservationSessionController } from "./observation-session-controller";
+import { DEFAULT_OBSERVATION_SESSION_CONFIG, ObservationSessionController } from "./observation-session-controller";
 import { candidateSignature, evaluateStability } from "./stability";
 import type {
   GoalConfirmationRequested,
@@ -108,6 +108,10 @@ afterEach(() => {
 });
 
 describe("ObservationSessionController lifecycle and scheduling", () => {
+  it("checks goal inference every twenty seconds by default", () => {
+    expect(DEFAULT_OBSERVATION_SESSION_CONFIG.inferenceIntervalMs).toBe(20_000);
+  });
+
   it("starts, stops, and does not duplicate timers on repeated start", async () => {
     const session = setup({ observations: [event("event-1", "Report")] });
     expect(session.controller.getSnapshot().status).toBe("STOPPED");

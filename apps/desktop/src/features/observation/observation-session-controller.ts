@@ -14,7 +14,7 @@ import { ExponentialBackoff } from "./backoff";
 export const DEFAULT_OBSERVATION_SESSION_CONFIG: ObservationSessionConfig = Object.freeze({
   observationIntervalMs: 3_000,
   uploadIntervalMs: 30_000,
-  inferenceIntervalMs: 60_000,
+  inferenceIntervalMs: 20_000,
   confidenceThreshold: 0.8,
   stableInferenceCount: 2,
   popupCooldownMs: 15 * 60_000,
