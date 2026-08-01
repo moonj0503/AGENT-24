@@ -40,16 +40,34 @@ const input: ContinuityContext = {
 };
 
 describe("FixtureContinuityAgent", () => {
-  it("returns the frozen contract-valid action plan", async () => {
+  it("returns a contract-valid action plan contextualized to the current Gap", async () => {
     const result = await new FixtureContinuityAgent().run(input);
     const frozenFixture = ActionPlanSchema.parse(await loadFrozenActionPlanFixture());
 
     expect(ActionPlanSchema.parse(result)).toEqual(result);
-    expect(result).toEqual(frozenFixture);
+    expect(result).toEqual({
+      ...frozenFixture,
+      planId: `plan-${input.gapSession.gapId}`,
+      gapId: input.gapSession.gapId,
+    });
     expect(result.actions.length).toBeGreaterThan(0);
-    expect(result.gapId).toBe(frozenFixture.gapId);
+    expect(result.planId).toBe(`plan-${input.gapSession.gapId}`);
+    expect(result.gapId).toBe(input.gapSession.gapId);
     expect(result.continuityObjective).toBe(frozenFixture.continuityObjective);
     expect(result.actions).toEqual(frozenFixture.actions);
+  });
+
+  it("does not reuse the fixture Gap identifier for another GapSession", async () => {
+    const otherGapId = "gap-runtime-002";
+    const result = await new FixtureContinuityAgent().run({
+      ...input,
+      gapSession: { ...input.gapSession, gapId: otherGapId },
+    });
+
+    expect(result).toMatchObject({
+      planId: `plan-${otherGapId}`,
+      gapId: otherGapId,
+    });
   });
 
   it("preserves the high-risk email action for later policy evaluation", async () => {
