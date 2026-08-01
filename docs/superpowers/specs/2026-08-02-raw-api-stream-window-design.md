@@ -23,3 +23,11 @@ Move Raw API Stream out of the main API Chat layout into a dedicated Tauri webvi
 - Unit-test message routing: event append, snapshot replacement, and cross-window clear.
 - Keep existing API stream validation for tool argument deltas, tool_call/result, resumed text, and completion.
 - Manually verify the main button opens a visible standalone Tauri window and events scroll there during a weather request.
+
+## Verification
+
+- Desktop tests: 72 passing.
+- API tests: 193 passing, 1 skipped.
+- Rust tests: 13 passing.
+- Desktop TypeScript typecheck: passing.
+- The Tauri development process starts successfully. Interactive window-click verification could not run because the local Orca runtime is unavailable.
