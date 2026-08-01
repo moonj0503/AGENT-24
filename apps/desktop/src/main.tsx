@@ -7,7 +7,7 @@ import { isOverlayPreviewRoute } from "./overlay-preview-route";
 import "./styles.css";
 import { createDesktopObservationWorkflow } from "./features/observation/desktop-session";
 
-export const desktopBootstrap = { mode: "mock", apiBaseUrl: import.meta.env?.VITE_API_BASE_URL ?? "http://localhost:4000/api/v1" };
+export const desktopBootstrap = { mode: "api", apiBaseUrl: import.meta.env?.VITE_API_BASE_URL ?? "http://localhost:4000/api/v1" };
 
 const root = document.getElementById("root");
 if (root) void getWindowLabel().then(async (label) => {
