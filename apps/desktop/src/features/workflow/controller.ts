@@ -20,6 +20,20 @@ export class DesktopWorkflowController {
   constructor(workSessionId: string, confirmedGoal?: Goal, private readonly dependencies = defaults) {
     setDesktopWorkflowState({ workSessionId, confirmedGoal, actionResults: [], phase: confirmedGoal ? "READY_FOR_GAP" : "OBSERVING", pending: false });
   }
+  beginGapIntent(): void {
+    const current = getDesktopWorkflowState();
+    if (current.gapSession && current.gapSession.status !== "COMPLETED") {
+      throw new Error("A Gap is already active.");
+    }
+    const { workSessionId } = current;
+    setDesktopWorkflowState({ workSessionId, actionResults: [], phase: "IDENTIFYING_GOAL", pending: false });
+  }
+  cancelGapIntent(): void {
+    const current = getDesktopWorkflowState();
+    if (current.phase === "IDENTIFYING_GOAL" || current.phase === "GOAL_CONFIRMATION") {
+      patchDesktopWorkflowState({ phase: "OBSERVING", pending: false });
+    }
+  }
   setConfirmedGoal(goal: Goal): void { patchDesktopWorkflowState({ confirmedGoal: goal, phase: "READY_FOR_GAP", error: undefined }); }
   clear(): void {
     const { workSessionId } = getDesktopWorkflowState();

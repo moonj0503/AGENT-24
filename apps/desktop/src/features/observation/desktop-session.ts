@@ -19,6 +19,8 @@ export interface DesktopObservationWorkflow {
   readonly workSessionId: string;
   getState(): PersistedObservationState;
   start(): void;
+  beginGapMode(): Promise<void>;
+  endGapMode(): Promise<void>;
   pause(): Promise<void>;
   resume(): Promise<void>;
   addBlockedApplication(identifier: string): Promise<void>;
@@ -44,6 +46,7 @@ async function initialize(options: { persistence?: ObservationPersistence; now?:
   const state = restoreObservationState(raw, now(), options.createId);
   if (state.confirmedGoal) setConfirmedGoal(state.confirmedGoal); else clearConfirmedGoal();
   const productWorkflow = initializeDesktopWorkflowController(state.workSessionId, state.confirmedGoal);
+  let gapIntentPending = state.gapIntentPending;
   let blockedApplications = [...state.privacy.blockedApplications];
   const syncNativePrivacy = async () => { if (isNativeOverlayAvailable()) await invokeNative("set_user_blocked_applications", { applications: blockedApplications }); };
   try { await syncNativePrivacy(); } catch { warning("Privacy settings could not be saved."); }
@@ -67,18 +70,59 @@ async function initialize(options: { persistence?: ObservationPersistence; now?:
     now, snoozeDurationMs: DEFAULT_CONFIRMATION_SNOOZE_MS, onError: warning,
     onStateChanged: () => void coordinator?.flush().catch(() => warning("Observation data could not be saved.")),
     onGoalConfirmed: (goal) => productWorkflow.setConfirmedGoal(goal),
+    onDeferredGapStartCancelled: () => {
+      gapIntentPending = false;
+      session.stop();
+      productWorkflow.cancelGapIntent();
+      void coordinator?.flush().catch(() => warning("Observation data could not be saved."));
+    },
   }, state);
   const readState = (): PersistedObservationState => ({
     ...state,
     ...session.getPersistentFields(),
     ...bridge.getPersistentFields(),
     confirmedGoal: getConfirmedGoalSnapshot().confirmedGoal,
+    gapIntentPending,
     privacy: { blockedApplications },
   });
   coordinator = new PersistenceCoordinator(persistence, readState);
+  const activateGap = async () => {
+    try {
+      await productWorkflow.startGap(session.getSnapshot().latestInference);
+      window.dispatchEvent(new CustomEvent("continuity:open-main-screen", { detail: "gap" }));
+    } catch (error) {
+      session.stop();
+      throw error;
+    } finally {
+      gapIntentPending = false;
+      await coordinator.flush();
+    }
+  };
   const workflow: DesktopObservationWorkflow = {
     session, confirmationBridge: bridge, workSessionId: state.workSessionId, getState: readState,
-    start: () => { if (state.observationStatus === "RUNNING") session.start(); void bridge.start(); },
+    start: () => {
+      void bridge.start().then(() => {
+        if (gapIntentPending) {
+          productWorkflow.beginGapIntent();
+          if (session.getSnapshot().status === "PAUSED") session.resume(); else session.start();
+          void bridge.requestGapStart(activateGap);
+        }
+      });
+    },
+    beginGapMode: async () => {
+      if (gapIntentPending) return;
+      gapIntentPending = true;
+      clearConfirmedGoal();
+      productWorkflow.beginGapIntent();
+      session.beginGapObservation();
+      if (session.getSnapshot().status === "PAUSED") session.resume(); else session.start();
+      await coordinator.flush();
+      await bridge.requestGapStart(activateGap);
+    },
+    endGapMode: async () => {
+      session.stop();
+      await coordinator.flush();
+    },
     pause: async () => { session.pause(); await coordinator.flush(); },
     resume: async () => { session.resume(); await coordinator.flush(); },
     addBlockedApplication: async (value) => { const id = normalizeApplicationIdentifier(value); if (id && !blockedApplications.includes(id)) blockedApplications = [...blockedApplications, id]; await syncNativePrivacy(); await coordinator.flush(); },

@@ -32,6 +32,21 @@ describe("DesktopWorkflowController", () => {
     expect(getDesktopWorkflowState()).toMatchObject({ phase: "GAP_ACTIVE", checkpoint: { checkpointId: "checkpoint-real-id" }, gapSession: { gapId: "gap-real-id" }, recoveryBrief: { briefId: "brief-real-id" } });
   });
 
+  it("records a local Gap intent without creating backend state", () => {
+    const deps = dependencies();
+    const controller = new DesktopWorkflowController("session-real-id", goal, deps);
+    controller.beginGapIntent();
+    expect(getDesktopWorkflowState()).toEqual({
+      workSessionId: "session-real-id",
+      actionResults: [],
+      phase: "IDENTIFYING_GOAL",
+      pending: false,
+    });
+    expect(deps.createCheckpoint).not.toHaveBeenCalled();
+    expect(deps.createGapSession).not.toHaveBeenCalled();
+    expect(deps.runGap).not.toHaveBeenCalled();
+  });
+
   it("preserves completed setup when runtime execution fails", async () => {
     const deps = { ...dependencies(), runGap: vi.fn(async () => { throw new Error("runtime unavailable"); }) };
     const controller = new DesktopWorkflowController("session-real-id", goal, deps);

@@ -8,6 +8,7 @@ export const PersistedObservationStateSchema = z.object({
   workSessionId: z.string().uuid(),
   workSessionCreatedAt: z.number().nonnegative(),
   observationStatus: z.enum(["RUNNING", "PAUSED"]),
+  gapIntentPending: z.boolean().default(false),
   confirmedGoal: GoalSchema.optional(),
   pendingObservations: z.array(ActivityEventSchema),
   uploadedObservationEventIds: z.array(z.string().min(1)).default([]),
@@ -69,7 +70,7 @@ export function migratePersistedObservationState(raw: unknown): PersistedObserva
 
 export function createDefaultObservationState(now: number, id: string = crypto.randomUUID()): PersistedObservationState {
   return {
-    version: 1, workSessionId: id, workSessionCreatedAt: now, observationStatus: "RUNNING",
+    version: 1, workSessionId: id, workSessionCreatedAt: now, observationStatus: "RUNNING", gapIntentPending: false,
     pendingObservations: [], uploadedObservationEventIds: [], pendingInferenceEventIds: [],
     consecutiveCandidateCount: 0, ignoredCandidates: [], privacy: { blockedApplications: [] },
   };
