@@ -5,6 +5,7 @@ import type {
   OpenAIClientFactory,
   OpenAIConfig,
 } from "./types.js";
+import { createRawLoggingFetch } from "./raw-http-logger.js";
 
 export class OpenAIClientInitializationError extends Error {
   constructor() {
@@ -18,7 +19,10 @@ export class DefaultOpenAIClientFactory implements OpenAIClientFactory {
 
   create(config: OpenAIConfig): OpenAIClient {
     try {
-      return new this.Client({ apiKey: config.apiKey });
+      return new this.Client({
+        apiKey: config.apiKey,
+        fetch: createRawLoggingFetch(),
+      });
     } catch {
       throw new OpenAIClientInitializationError();
     }
