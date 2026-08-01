@@ -108,6 +108,13 @@ export class WorkflowService {
   }
 }
 
+export function createWorkflowService(
+  repository: WorkflowRepository,
+  goalInterpreter: GoalInterpreter,
+): WorkflowService {
+  return new WorkflowService(repository, goalInterpreter);
+}
+
 export function createInMemoryWorkflowService(goalInterpreter: GoalInterpreter = new FixtureGoalInterpreter()): WorkflowService {
-  return new WorkflowService(new InMemoryWorkflowRepository(), goalInterpreter);
+  return createWorkflowService(new InMemoryWorkflowRepository(), goalInterpreter);
 }
