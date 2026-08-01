@@ -3,6 +3,7 @@ import { ActivityEventSchema } from "./activity.js";
 import { ActionPlanSchema, ActionResultSchema } from "./action.js";
 import { CheckpointSchema } from "./checkpoint.js";
 import { GapSessionSchema } from "./gap.js";
+import { GoalSchema } from "./goal.js";
 import { RecoveryBriefSchema } from "./recovery.js";
 
 const IdentifierSchema = z.string().min(1);
@@ -109,6 +110,44 @@ export const EndGapRequestSchema = z.object({
 
 export const EndGapResponseSchema = GapSessionSchema;
 
+/** GET /gaps query parameters. */
+export const GapHistoryQuerySchema = z.object({
+  status: z.enum(["PLANNING", "EXECUTING", "WAITING_APPROVAL", "RECOVERING", "COMPLETED", "FAILED"]).optional(),
+});
+
+/** GET /gaps/:gapId path parameters. */
+export const GapHistoryParamsSchema = z.object({
+  gapId: IdentifierSchema,
+});
+
+export const GapActionHistorySchema = z.object({
+  action: ActionPlanSchema.shape.actions.element,
+  decision: z.enum(["APPROVE", "REJECT"]).optional(),
+  decisionReason: z.string().min(1).optional(),
+  result: ActionResultSchema.optional(),
+});
+
+export const GapHistoryItemSchema = z.object({
+  gapSession: GapSessionSchema,
+  recoveryBrief: RecoveryBriefSchema.optional(),
+});
+
+export const GapHistoryListResponseSchema = z.object({
+  items: z.array(GapHistoryItemSchema),
+});
+
+export const GapActionsResponseSchema = z.object({
+  actions: z.array(GapActionHistorySchema),
+});
+
+export const GapHistoryDetailSchema = z.object({
+  gapSession: GapSessionSchema,
+  goal: GoalSchema,
+  checkpoint: CheckpointSchema,
+  recoveryBrief: RecoveryBriefSchema.optional(),
+  actions: z.array(GapActionHistorySchema),
+});
+
 /** POST /gaps/:gapId/run (path contract) */
 export const RunGapRecoveryParamsSchema = z.object({
   gapId: IdentifierSchema,
@@ -137,6 +176,13 @@ export type ActionApprovalParams = z.infer<typeof ActionApprovalParamsSchema>;
 export type ActionApprovalRequest = z.infer<typeof ActionApprovalRequestSchema>;
 export type EndGapParams = z.infer<typeof EndGapParamsSchema>;
 export type EndGapRequest = z.infer<typeof EndGapRequestSchema>;
+export type GapHistoryQuery = z.infer<typeof GapHistoryQuerySchema>;
+export type GapHistoryParams = z.infer<typeof GapHistoryParamsSchema>;
+export type GapActionHistory = z.infer<typeof GapActionHistorySchema>;
+export type GapHistoryItem = z.infer<typeof GapHistoryItemSchema>;
+export type GapHistoryListResponse = z.infer<typeof GapHistoryListResponseSchema>;
+export type GapActionsResponse = z.infer<typeof GapActionsResponseSchema>;
+export type GapHistoryDetail = z.infer<typeof GapHistoryDetailSchema>;
 export type RunGapRecoveryParams = z.infer<typeof RunGapRecoveryParamsSchema>;
 export type RunGapRecoveryRequest = z.infer<typeof RunGapRecoveryRequestSchema>;
 export type RunGapRecoveryResponse = z.infer<typeof RunGapRecoveryResponseSchema>;

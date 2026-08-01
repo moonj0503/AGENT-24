@@ -10,12 +10,15 @@ import { registerLifecycleRoutes } from "./features/workflow/lifecycle-routes.js
 import type { GapLifecycleService } from "./services/gap-lifecycle-service.js";
 import { InMemoryAgentEventBus } from "./features/workflow/event-bus.js";
 import { registerEventRoutes } from "./features/workflow/event-routes.js";
+import { registerHistoryRoutes } from "./features/workflow/history-routes.js";
+import type { GapHistoryService } from "./services/gap-history-service.js";
 
 export interface AppDependencies {
   workflowService?: WorkflowService;
   idempotencyStore?: IdempotencyRepository;
   gapRecoveryService?: GapRecoveryService;
   gapLifecycleService?: GapLifecycleService;
+  gapHistoryService?: GapHistoryService;
   eventBus?: InMemoryAgentEventBus;
 }
 
@@ -32,6 +35,9 @@ export function buildApp(dependencies: AppDependencies = {}) {
   }
   if (dependencies.gapRecoveryService) {
     registerRecoveryRoutes(app, dependencies.gapRecoveryService);
+  }
+  if (dependencies.gapHistoryService) {
+    registerHistoryRoutes(app, dependencies.gapHistoryService);
   }
   return app;
 }

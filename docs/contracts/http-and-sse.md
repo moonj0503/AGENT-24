@@ -1,6 +1,6 @@
 # HTTP and SSE Contract
 
-Base path: `/api/v1`. `POST /observations`, `POST /goal-inferences`, `POST /goals/confirm`, `POST /checkpoints`, `POST /gaps`, `POST /gaps/:gapId/run`, `POST /gaps/:gapId/actions/:actionId/approval`, and `POST /gaps/:gapId/end` all accept an `Idempotency-Key` header. Success bodies use the schemas in `@continuity/contracts`; malformed bodies return an `ApiError` with `code: "VALIDATION_ERROR"`.
+Base path: `/api/v1`. `POST /observations`, `POST /goal-inferences`, `POST /goals/confirm`, `POST /checkpoints`, `POST /gaps`, `POST /gaps/:gapId/run`, `POST /gaps/:gapId/actions/:actionId/approval`, and `POST /gaps/:gapId/end` all accept an `Idempotency-Key` header. History `GET` requests do not need that header. Success bodies use the schemas in `@continuity/contracts`; malformed bodies return an `ApiError` with `code: "VALIDATION_ERROR"`.
 
 Desktop clients subscribe to `GET /events`. Every event is an `AgentEvent` with a monotonic server sequence, and re-connection uses `Last-Event-ID`. Event order is `GOAL_INFERRED`, `GAP_STARTED`, zero or more `ACTION_UPDATED`, then `RECOVERY_READY`. The current demo implementation replays the most recent 100 events from memory; it resets on API process restart and is not yet a durable event log.
 
@@ -84,7 +84,7 @@ The common error contract is implemented and connected to the Fastify applicatio
 | Idempotency pre-handler | Complete (DB + in-memory test double) | `apps/api/src/plugins/idempotency.ts` |
 | First API vertical slice | Complete (service/repository split) | `apps/api/src/features/workflow/` |
 | Drizzle database schema | Added | `packages/db/src/schema.ts` |
-| SQL migrations | Added | `packages/db/migrations/0001_workflow.sql`, `0002_gap_lifecycle.sql` |
+| SQL migrations | Added | `packages/db/migrations/0001_workflow.sql`, `0002_gap_lifecycle.sql`, `0003_action_results.sql` |
 | Migration runner | Added | `packages/db/src/migrate.ts` |
 | Workflow Repository interface | Complete | `apps/api/src/repositories/workflow-repository.ts` |
 | PostgreSQL Workflow Repository | Complete | `apps/api/src/repositories/drizzle-workflow-repository.ts` |
@@ -94,6 +94,8 @@ The common error contract is implemented and connected to the Fastify applicatio
 | Checkpoint and Gap lifecycle API | Complete | `apps/api/src/services/gap-lifecycle-service.ts` |
 | Recovery Runtime API | Complete | `apps/api/src/services/gap-recovery-service.ts` |
 | SSE event stream | Complete (in-memory replay) | `apps/api/src/features/workflow/event-routes.ts` |
+| History read API | Complete | `apps/api/src/features/workflow/history-routes.ts` |
+| Action execution-result persistence | Complete | `action_results`, `WorkflowRepository.saveActionResult` |
 
 The Fastify handler currently converts validation errors, typed `ApiHttpError` failures, unknown routes, conflicts, and unexpected exceptions. Unexpected exceptions return a generic `INTERNAL_ERROR` message so internal details are not exposed.
 
@@ -113,11 +115,19 @@ POST /checkpoints
 POST /gaps
   → validate the Goal/Checkpoint pair and create a persistent GapSession
 POST /gaps/:gapId/run
-  → run the policy-aware recovery runtime and persist its plan and RecoveryBrief
+  → run the policy-aware recovery runtime and persist its plan, ActionResults, and RecoveryBrief
 POST /gaps/:gapId/actions/:actionId/approval
   → persist an approval or rejection decision for an action awaiting review (it does not directly perform an external action)
 POST /gaps/:gapId/end
   → mark the GapSession as completed
+GET /gaps?status=...
+  → list persisted GapSessions for the History screen, optionally filtered by status
+GET /gaps/:gapId
+  → return the GapSession, Goal, Checkpoint, RecoveryBrief, action decisions, and ActionResults
+GET /gaps/:gapId/actions
+  → return the persisted actions with their approval decisions and execution results
+GET /gaps/:gapId/recovery-brief
+  → return the persisted RecoveryBrief
 ```
 
 | Endpoint | Success status | Response |
@@ -130,6 +140,10 @@ POST /gaps/:gapId/end
 | `POST /gaps/:gapId/run` | 200 | `RunGapRecoveryResponse` |
 | `POST /gaps/:gapId/actions/:actionId/approval` | 200 | `PlannedAction` |
 | `POST /gaps/:gapId/end` | 200 | `GapSession` |
+| `GET /gaps?status=COMPLETED` | 200 | `GapHistoryListResponse` |
+| `GET /gaps/:gapId` | 200 | `GapHistoryDetail` |
+| `GET /gaps/:gapId/actions` | 200 | `GapActionsResponse` |
+| `GET /gaps/:gapId/recovery-brief` | 200 | `RecoveryBrief` |
 
 Routes now perform request parsing and response formatting only. Business rules live in `WorkflowService`, while persistence lives behind `WorkflowRepository`.
 
@@ -144,23 +158,30 @@ Route
 
 `buildApp()` uses the in-memory repository by default so API tests do not need a running database. The real `server.ts` requires `DATABASE_URL` and wires `DrizzleWorkflowRepository` and `DrizzleIdempotencyStore`.
 
-The lifecycle demo order is `Goal → Checkpoint → Gap → Run Recovery → optional Action decision → End Gap`. `GET /events` can be opened before this flow; it emits `GOAL_INFERRED`, `GAP_STARTED`, `ACTION_UPDATED`, and `RECOVERY_READY` as Server-Sent Events.
+The lifecycle demo order is `Goal → Checkpoint → Gap → Run Recovery → optional Action decision → End Gap`. `GET /events` can be opened before this flow; it emits `GOAL_INFERRED`, `GAP_STARTED`, `ACTION_UPDATED`, and `RECOVERY_READY` as Server-Sent Events. The History screen should call `GET /gaps?status=COMPLETED` for its list and `GET /gaps/:gapId` for a selected item.
+
+### Approval decision and execution result
+
+An approval and an execution result are intentionally different records. `gap_actions.decision` answers “did the user permit this action?”; `action_results.result_data` answers “what happened when the runtime performed or simulated the action?” This prevents an approval from being displayed as a successful execution. The current runtime can persist its returned results, but the approval endpoint still does **not** automatically call external tools.
 
 ## Next implementation steps
 
-1. Apply the latest lifecycle migration to the PostgreSQL database, then run:
+1. Create the ignored repository-root `.env` by copying `.env.example` and replacing only `YOUR_URL_ENCODED_PASSWORD`. The package scripts load that root file when it exists. Do not commit `.env`.
+
+2. Apply the latest migrations (including `0003_action_results.sql`) to the PostgreSQL database, then run:
 
    ```powershell
-   $env:DATABASE_URL = "postgresql://user:password@localhost:5432/continuity"
-   corepack.cmd pnpm --filter @continuity/db migrate
+   corepack.cmd pnpm --filter @continuity/db run migrate
    ```
 
-2. Start the production-wired API with `corepack.cmd pnpm --filter @continuity/api dev` and verify the full Goal → Checkpoint → Gap → Recovery flow.
-3. Run `corepack.cmd pnpm --filter @continuity/api test`; the PostgreSQL Repository test runs when `DATABASE_URL` is set and skips otherwise.
-4. Add idempotency TTL cleanup scheduling and make migration execution part of the deployment pipeline.
-5. Store SSE events durably so reconnect replay survives an API restart.
-6. Replace the fixture Goal Interpreter through its interface with the real Member 4 agent implementation and preserve a fixture fallback.
-7. Add end-to-end tests for the complete demo flow, concurrent duplicate requests, process restart behavior, and failure scenarios.
+3. Start the production-wired API with `corepack.cmd pnpm --filter @continuity/api dev` and verify the full Goal → Checkpoint → Gap → Recovery flow.
+4. Run `corepack.cmd pnpm --filter @continuity/api test`; set `DATABASE_URL` in the current PowerShell session as well when running the PostgreSQL integration test directly.
+5. Add idempotency TTL cleanup scheduling and make migration execution part of the deployment pipeline.
+6. Connect the Desktop History list/detail screens to the new `GET /gaps` and `GET /gaps/:gapId` APIs; remove static demo activity only after the integration is verified.
+7. Complete the approved-tool lifecycle: a separate, policy-checked worker must execute approved actions, persist `ActionResult`, and emit a fresh event. Do not make the approval endpoint execute tools directly.
+8. Store SSE events durably so reconnect replay survives an API restart.
+9. Replace the fixture Goal Interpreter through its interface with the real Member 4 agent implementation and preserve a fixture fallback.
+10. Add end-to-end tests for the complete demo flow, concurrent duplicate requests, process restart behavior, and failure scenarios.
 
 ## Request body contracts
 

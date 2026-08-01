@@ -21,6 +21,11 @@ import {
   ActionPlanSchema,
   ActionResultSchema,
   RecoveryBriefSchema,
+  GapActionsResponseSchema,
+  GapHistoryDetailSchema,
+  GapHistoryParamsSchema,
+  GapHistoryQuerySchema,
+  GapHistoryListResponseSchema,
 } from "../src/index.js";
 
 const fixture = (name: string) => JSON.parse(readFileSync(
@@ -101,6 +106,55 @@ describe("HTTP request contracts", () => {
         occurredAt: "2026-08-01T09:30:00.000Z",
       })],
       recoveryBrief: RecoveryBriefSchema.parse(fixture("recovery-brief.json")),
+    }).success).toBe(true);
+  });
+
+  it("validates History query, path, list, detail, and action responses", () => {
+    const gap = {
+      gapId: "gap-001",
+      workSessionId: "ws-001",
+      goalId: "goal-001",
+      checkpointId: "checkpoint-001",
+      status: "COMPLETED",
+      startedAt: "2026-08-01T09:10:00.000Z",
+      endedAt: "2026-08-01T09:20:00.000Z",
+    };
+    const action = ActionPlanSchema.parse(fixture("action-plan.json")).actions[0];
+    const result = ActionResultSchema.parse({
+      actionId: action.actionId,
+      status: "COMPLETED",
+      summary: "Action completed.",
+      externalEffect: "NONE",
+      occurredAt: "2026-08-01T09:30:00.000Z",
+    });
+    expect(GapHistoryQuerySchema.safeParse({ status: "COMPLETED" }).success).toBe(true);
+    expect(GapHistoryParamsSchema.safeParse({ gapId: "gap-001" }).success).toBe(true);
+    expect(GapHistoryListResponseSchema.safeParse({ items: [{ gapSession: gap }] }).success).toBe(true);
+    expect(GapActionsResponseSchema.safeParse({
+      actions: [{ action, decision: "APPROVE", result }],
+    }).success).toBe(true);
+    expect(GapHistoryDetailSchema.safeParse({
+      gapSession: gap,
+      goal: {
+        goalId: "goal-001",
+        title: "Finish the report",
+        path: ["Demo"],
+        status: "IN_PROGRESS",
+        source: "USER_CONFIRMED",
+        confidence: 0.9,
+      },
+      checkpoint: {
+        checkpointId: "checkpoint-001",
+        goalId: "goal-001",
+        currentState: "Writing.",
+        completedSincePrevious: [],
+        openQuestions: [],
+        likelyNextActions: [],
+        relatedResources: [],
+        confidence: 0.9,
+        createdAt: "2026-08-01T09:00:00.000Z",
+      },
+      actions: [{ action, decision: "APPROVE", result }],
     }).success).toBe(true);
   });
 });

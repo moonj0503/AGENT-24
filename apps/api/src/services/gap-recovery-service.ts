@@ -62,6 +62,8 @@ export class GapRecoveryService {
 
     try {
       await this.repository.saveActionPlan(result.actionPlan);
+      await Promise.all(result.actionResults.map((actionResult) =>
+        this.repository.saveActionResult(gapSession.gapId, actionResult)));
       await this.repository.saveRecoveryBrief(result.recoveryBrief);
     } catch (cause) {
       throw new ApiHttpError("DATABASE_FAILURE", "The recovery result could not be saved.", { cause });
