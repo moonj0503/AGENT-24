@@ -40,6 +40,16 @@ describe("frontend native integration fallback", () => {
     expect(received).toEqual([{ actionId: "action-real", decision: "APPROVE" }]);
   });
 
+  it("delivers only valid file-permission decisions", async () => {
+    let deliver: ((event: { payload: unknown }) => void) | undefined;
+    const received: unknown[] = [];
+    globalScope.window = { __TAURI__: { event: { listen: async (_name: string, handler: (event: { payload: unknown }) => void) => { deliver = handler; return () => undefined; } } } } as unknown as Window;
+    await listenForTauriEvent(TAURI_EVENTS.FILE_PERMISSION_DECIDED, (decision) => received.push(decision));
+    deliver?.({ payload: { decision: "GAP" } });
+    deliver?.({ payload: { decision: "EDIT_EVERYTHING" } });
+    expect(received).toEqual([{ decision: "GAP" }]);
+  });
+
   it("uses the exact native hide command and recovery event payload", async () => {
     const invoked: string[] = [];
     let emitted: { name: string; payload: unknown } | undefined;

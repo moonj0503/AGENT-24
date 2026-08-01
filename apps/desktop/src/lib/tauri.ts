@@ -5,6 +5,7 @@ import type { PendingGoalConfirmation } from "../features/goals/pending-confirma
 
 export const TAURI_EVENTS = {
   GOAL_CONFIRMATION: "overlay:goal-confirmation",
+  FILE_PERMISSION_REQUESTED: "overlay:file-permission-requested",
   GAP_START_CONFIRMATION: "overlay:gap-start-confirmation",
   APPROVAL_REQUIRED: "overlay:approval-required",
   RECOVERY_READY: "overlay:recovery-ready",
@@ -15,6 +16,7 @@ export const TAURI_EVENTS = {
   GOAL_CONFIRMATION_RESOLVED: "goal:confirmation-resolved",
   GAP_START_CONFIRMED: "gap:start-confirmed",
   ACTION_APPROVAL_DECIDED: "gap:action-approval-decided",
+  FILE_PERMISSION_DECIDED: "gap:file-permission-decided",
 } as const;
 
 export const MAIN_SCREEN_IDS = [
@@ -32,6 +34,7 @@ export type TauriEventPayloads = {
     inference: GoalInferenceResult;
     pending?: PendingGoalConfirmation;
   };
+  [TAURI_EVENTS.FILE_PERMISSION_REQUESTED]: { goalTitle: string };
   [TAURI_EVENTS.GAP_START_CONFIRMATION]: { selectedGoal?: GoalCandidate };
   [TAURI_EVENTS.APPROVAL_REQUIRED]: { gap: GapData; actionId: string };
   [TAURI_EVENTS.RECOVERY_READY]: { brief: RecoveryBrief & { gapDurationSeconds?: number } };
@@ -45,6 +48,7 @@ export type TauriEventPayloads = {
   };
   [TAURI_EVENTS.GAP_START_CONFIRMED]: undefined;
   [TAURI_EVENTS.ACTION_APPROVAL_DECIDED]: { actionId: string; decision: "APPROVE" | "REJECT" };
+  [TAURI_EVENTS.FILE_PERMISSION_DECIDED]: { decision: "GAP" | "ALWAYS" | "DENY" };
 };
 
 type TauriBridge = {
@@ -155,11 +159,13 @@ function parseTauriEventPayload<N extends TauriEventName>(name: N, payload: unkn
   if (name === TAURI_EVENTS.MAIN_NAVIGATE) return isMainScreen(payload) ? payload as unknown as TauriEventPayloads[N] : undefined;
   if (!isRecord(payload)) return undefined;
   if (name === TAURI_EVENTS.GOAL_CONFIRMATION && isRecord(payload.inference)) return payload as TauriEventPayloads[N];
+  if (name === TAURI_EVENTS.FILE_PERMISSION_REQUESTED && typeof payload.goalTitle === "string") return payload as TauriEventPayloads[N];
   if (name === TAURI_EVENTS.GAP_START_CONFIRMATION && (payload.selectedGoal === undefined || isRecord(payload.selectedGoal))) return payload as TauriEventPayloads[N];
   if (name === TAURI_EVENTS.APPROVAL_REQUIRED && isRecord(payload.gap) && typeof payload.actionId === "string") return payload as TauriEventPayloads[N];
   if (name === TAURI_EVENTS.RECOVERY_READY && isRecord(payload.brief)) return payload as TauriEventPayloads[N];
   if (name === TAURI_EVENTS.GOAL_CONFIRMED && isRecord(payload.goal)) return payload as TauriEventPayloads[N];
   if (name === TAURI_EVENTS.ACTION_APPROVAL_DECIDED && typeof payload.actionId === "string" && ["APPROVE", "REJECT"].includes(String(payload.decision))) return payload as TauriEventPayloads[N];
+  if (name === TAURI_EVENTS.FILE_PERMISSION_DECIDED && ["GAP", "ALWAYS", "DENY"].includes(String(payload.decision))) return payload as TauriEventPayloads[N];
   if (
     name === TAURI_EVENTS.GOAL_CONFIRMATION_RESOLVED
     && ["LATER", "IGNORE", "KEEP_CURRENT"].includes(String(payload.action))

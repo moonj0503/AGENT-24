@@ -6,6 +6,7 @@ import { GoalConfirmationOverlay } from "./components/GoalConfirmationOverlay";
 import { GapStartOverlay } from "./components/GapStartOverlay";
 import { ApprovalOverlay } from "./components/ApprovalOverlay";
 import { RecoveryNotificationOverlay } from "./components/RecoveryNotificationOverlay";
+import { FilePermissionOverlay } from "./components/FilePermissionOverlay";
 import { usePendingGoalConfirmationSnapshot } from "../features/goals/pending-confirmation-store";
 import { dismissOverlayWithAnimation } from "./overlay-store";
 
@@ -16,6 +17,7 @@ export type OverlayHandlers = {
   onKeepCurrentGoal?: () => void;
   onConfirmGapStart: () => Promise<void>;
   onApproval: (actionId: string, decision: "APPROVE" | "REJECT") => Promise<void>;
+  onFilePermission: (decision: "GAP" | "ALWAYS" | "DENY") => Promise<void>;
   onOpenMain: (screen: "dashboard" | "goal" | "gap" | "recovery") => void;
 };
 
@@ -34,6 +36,7 @@ export function OverlayRoot({ handlers, inference }: { handlers: OverlayHandlers
     onKeepCurrent={handlers.onKeepCurrentGoal ?? dismissOverlayWithAnimation}
     onOpenDetails={() => handlers.onOpenMain("goal")}
   />;
+  else if (snapshot.state === "FILE_EDIT_PERMISSION") content = <FilePermissionOverlay goalTitle={snapshot.goalTitle} onDecision={handlers.onFilePermission} />;
   else if (snapshot.state === "GAP_START_CONFIRMATION") content = <GapStartOverlay goal={snapshot.selectedGoal} gap={snapshot.gap} onConfirm={handlers.onConfirmGapStart} onOpenDetails={() => handlers.onOpenMain("gap")} />;
   else if (snapshot.state === "APPROVAL_REQUIRED" && snapshot.gap && snapshot.actionId) content = <ApprovalOverlay gap={snapshot.gap} actionId={snapshot.actionId} onDecision={handlers.onApproval} onOpenDetails={() => handlers.onOpenMain("gap")} />;
   else if (snapshot.state === "RECOVERY_READY" && snapshot.brief) content = <RecoveryNotificationOverlay brief={snapshot.brief} onOpenDetails={() => handlers.onOpenMain("recovery")} />;
