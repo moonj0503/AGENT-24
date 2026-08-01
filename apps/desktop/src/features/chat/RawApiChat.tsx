@@ -18,7 +18,7 @@ export function RawApiChat() {
     if (!prompt || busy) return;
     setBusy(true); setAnswer(""); setMessage("");
     try {
-      const response = await fetch(`${desktopBootstrap.apiBaseUrl}/chat/stream`, { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream" }, body: JSON.stringify({ message: prompt }) });
+      const response = await fetch(`${desktopBootstrap.apiBaseUrl}/chat/stream`, { method: "POST", headers: { "content-type": "application/json", accept: "text/event-stream", "idempotency-key": crypto.randomUUID() }, body: JSON.stringify({ message: prompt }) });
       if (!response.ok || !response.body) throw new Error(`Chat request failed (${response.status})`);
       const reader = response.body.getReader(); const decoder = new TextDecoder(); let buffer = "";
       for (;;) {
