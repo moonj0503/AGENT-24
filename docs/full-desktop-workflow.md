@@ -8,6 +8,8 @@ The initial desktop action creates only a local pending Gap intent. Observation 
 
 Goal identification runs once per minute and still requires two stable matching inference results before prompting the user. Failed inference attempts remain queued for retry and surface a temporary availability warning in the desktop.
 
+The desktop process itself is excluded before observations enter the upload queue so opening Continuity cannot alter or reset inferred user intent.
+
 The desktop workflow controller is the authoritative owner of backend-returned IDs and lifecycle objects. The observation session remains responsible for inference scheduling and persistence. Direct HTTP responses are authoritative for user-triggered mutations; broad SSE synchronization is deferred because the current lifecycle is synchronous and does not require it.
 
 ## Environment
