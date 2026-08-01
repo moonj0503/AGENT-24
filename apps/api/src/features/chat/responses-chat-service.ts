@@ -12,13 +12,11 @@ export interface ResponsesChatService {
 
 type StreamEvent = {
   readonly type?: string;
-  readonly name?: string;
-  readonly call_id?: string;
-  readonly arguments?: string;
   readonly response?: { readonly id?: string };
+  readonly item?: { readonly type?: string; readonly name?: string; readonly call_id?: string; readonly arguments?: string };
 };
 
-type FunctionCall = Required<Pick<StreamEvent, "name" | "call_id" | "arguments">>;
+type FunctionCall = { readonly name: string; readonly call_id: string; readonly arguments: string };
 
 const weatherTool = {
   type: "function" as const,
@@ -34,7 +32,6 @@ const weatherTool = {
 };
 
 function now(): string { return new Date().toISOString(); }
-
 function eventType(event: unknown): string {
   const record = event as StreamEvent;
   return typeof record.type === "string" ? record.type : "error";
@@ -53,13 +50,15 @@ export class OpenAIResponsesChatService implements ResponsesChatService {
     let input: string | Array<{ type: "function_call_output"; call_id: string; output: string }> = message;
     let previousResponseId: string | undefined;
     for (;;) {
-      const stream = await this.client.responses.create({ model: this.model, input, previous_response_id: previousResponseId, tools: [weatherTool], stream: true, store: false });
+      const stream = await this.client.responses.create({ model: this.model, input, previous_response_id: previousResponseId, tools: [weatherTool], stream: true, store: true });
       const calls: FunctionCall[] = [];
       let completedResponseId: string | undefined;
       for await (const event of stream as AsyncIterable<unknown>) {
         emit({ occurredAt: now(), type: eventType(event), payload: event });
         const record = event as StreamEvent;
-        if (record.type === "response.function_call_arguments.done" && record.name && record.call_id && record.arguments) calls.push({ name: record.name, call_id: record.call_id, arguments: record.arguments });
+        if (record.type === "response.output_item.done" && record.item?.type === "function_call" && record.item.name && record.item.call_id && record.item.arguments) {
+          calls.push({ name: record.item.name, call_id: record.item.call_id, arguments: record.item.arguments });
+        }
         if (record.type === "response.completed") completedResponseId = record.response?.id;
       }
       if (calls.length === 0) return;
