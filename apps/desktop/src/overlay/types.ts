@@ -15,6 +15,7 @@ export type MainScreen = "dashboard" | "goal" | "gap" | "recovery" | "history" |
 
 export type OverlaySnapshot = {
   state: OverlayState | null;
+  isClosing?: boolean;
   inference?: GoalInferenceResult;
   selectedGoal?: GoalCandidate;
   gap?: GapData;

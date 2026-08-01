@@ -6,6 +6,8 @@ import { emitTauriEvent, hideOverlay, TAURI_EVENTS } from "../lib/tauri";
 
 let snapshot: OverlaySnapshot = { state: null };
 const listeners = new Set<() => void>();
+let dismissTimer: ReturnType<typeof setTimeout> | undefined;
+export const OVERLAY_EXIT_DURATION_MS = 340;
 
 function emit(next: OverlaySnapshot) {
   snapshot = next;
@@ -19,7 +21,11 @@ export function useOverlaySnapshot(): OverlaySnapshot {
 }
 
 export function openOverlay(next: Omit<OverlaySnapshot, "state"> & { state: OverlayState }) {
-  emit(next);
+  if (dismissTimer) {
+    clearTimeout(dismissTimer);
+    dismissTimer = undefined;
+  }
+  emit({ ...next, isClosing: false });
 }
 
 export function updateOverlay(next: Partial<OverlaySnapshot>) {
@@ -27,11 +33,25 @@ export function updateOverlay(next: Partial<OverlaySnapshot>) {
 }
 
 export function dismissOverlay() {
+  if (dismissTimer) {
+    clearTimeout(dismissTimer);
+    dismissTimer = undefined;
+  }
   emit({ state: "HIDDEN" });
   void emitTauriEvent(TAURI_EVENTS.DISMISS, undefined);
   void hideOverlay().catch((cause) => {
     if (import.meta.env?.DEV) console.error("Unable to hide the native Quick Overlay.", cause);
   });
+}
+
+/** Plays the exit animation before removing the overlay and hiding its native window. */
+export function dismissOverlayWithAnimation() {
+  if (dismissTimer || snapshot.state === null || snapshot.state === "HIDDEN") return;
+  emit({ ...snapshot, isClosing: true });
+  dismissTimer = setTimeout(() => {
+    dismissTimer = undefined;
+    dismissOverlay();
+  }, OVERLAY_EXIT_DURATION_MS);
 }
 
 export function requestOverlayState(states: Array<{ state: OverlayState; payload?: Omit<OverlaySnapshot, "state"> }>) {

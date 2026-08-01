@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from "react";
 import { fetchGoalInference, selectGoal } from "../features/goals/api";
 import { createApprovalAction, createGapStartAction } from "./actions";
-import { dismissOverlay, getOverlaySnapshot, openOverlay, useOverlaySnapshot } from "./overlay-store";
+import { dismissOverlayWithAnimation, getOverlaySnapshot, openOverlay, useOverlaySnapshot } from "./overlay-store";
 import { OverlayRoot } from "./OverlayRoot";
 import { listenForTauriEvent, openMainWindow, TAURI_EVENTS } from "../lib/tauri";
 import type { GoalCandidate } from "@continuity/contracts";
@@ -26,23 +26,20 @@ export function OverlayApp() {
       listenForTauriEvent(TAURI_EVENTS.RECOVERY_READY, (payload) => { if (active) openOverlay({ state: "RECOVERY_READY", ...payload }); }),
       listenForTauriEvent(TAURI_EVENTS.WINDOW_FOCUS, restoreGoalAfterFocus),
     ]).then((unsubscribes) => { if (active) cleanups.push(...unsubscribes); else unsubscribes.forEach((cleanup) => cleanup()); });
-    void fetchGoalInference().then((inference) => {
-      if (active && !getOverlaySnapshot().state) openOverlay({ state: "GOAL_CONFIRMATION", inference });
-    }).catch(() => undefined);
     return () => { active = false; cleanups.forEach((cleanup) => cleanup()); };
   }, []);
 
   const startGapOnce = useMemo(() => createGapStartAction(), []);
   const inference = snapshot.inference;
   return <div className="overlay-shell">
-    <button className="overlay-dismiss" aria-label="Dismiss" onClick={dismissOverlay}>×</button>
+    <button className="overlay-dismiss" aria-label="Dismiss" onClick={dismissOverlayWithAnimation}>×</button>
     <OverlayRoot
       inference={inference}
       handlers={{
         onGoalSelected: (goal) => { if (inference) openOverlay({ state: "GAP_START_CONFIRMATION", selectedGoal: goal }); },
         onConfirmGapStart: startGapOnce,
         onApproval: async (actionId, status) => { if (snapshot.gap) openOverlay({ state: "APPROVAL_REQUIRED", gap: await createApprovalAction(snapshot.gap, actionId, status), actionId }); },
-        onOpenMain: (screen) => { dismissOverlay(); void openMainWindow(screen); },
+        onOpenMain: (screen) => { dismissOverlayWithAnimation(); void openMainWindow(screen); },
       }}
     />
   </div>;

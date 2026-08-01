@@ -1,5 +1,5 @@
 import type { GoalCandidate, GoalInferenceResult } from "@continuity/contracts";
-import { dismissOverlay } from "../overlay-store";
+import { dismissOverlayWithAnimation } from "../overlay-store";
 
 export function GoalConfirmationOverlay({ inference, onSelect, onOpenDetails }: { inference: GoalInferenceResult; onSelect: (goal: GoalCandidate) => void; onOpenDetails: () => void }) {
   return <section className="overlay-card" aria-labelledby="overlay-goal-title">
@@ -12,6 +12,6 @@ export function GoalConfirmationOverlay({ inference, onSelect, onOpenDetails }: 
       <span><strong>{candidate.title}</strong><small>{candidate.description}</small><small>Evidence: {candidate.evidence[0]?.description ?? "No evidence summary available."}</small></span>
       <b>{Math.round(candidate.confidence * 100)}%</b>
     </button>)}</div>
-    <div className="overlay-actions"><button className="button primary" onClick={onOpenDetails}>Enter a different goal</button><button className="button secondary" onClick={dismissOverlay}>Cancel</button></div>
+    <div className="overlay-actions"><button className="button primary" onClick={onOpenDetails}>Enter a different goal</button><button className="button secondary" onClick={dismissOverlayWithAnimation}>Cancel</button></div>
   </section>;
 }
