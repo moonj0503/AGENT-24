@@ -306,6 +306,26 @@ Audit Log
 
 The model never receives unrestricted authority to execute external actions directly.
 
+## 5.3 Desktop Window Architecture
+
+The desktop application uses two Tauri windows that share the same React codebase, API client, Zustand state, and backend contracts.
+
+```text
+Desktop Application
+├─ Main Window
+│  ├─ Dashboard
+│  ├─ Full Gap Status
+│  ├─ Full Recovery Brief
+│  ├─ History
+│  └─ Permission Settings
+│
+└─ Quick Overlay Window
+   ├─ Goal Confirmation
+   ├─ Gap Start Confirmation
+   ├─ Approval Request
+   └─ Recovery Notification
+   ```
+   
 ---
 
 # 6. Technology Stack
@@ -395,6 +415,15 @@ continuity-agent/
 │  │  │  │  ├─ gap-session.json
 │  │  │  │  ├─ action-plan.json
 │  │  │  │  └─ recovery-brief.json
+│  │  │  ├─ overlay/
+│  │  │  │  ├─ OverlayApp.tsx
+│  │  │  │  ├─ OverlayRouter.tsx
+│  │  │  │  ├─ OverlayRoot.tsx
+│  │  │  │  └─ components/
+│  │  │  │     ├─ GoalConfirmationOverlay.tsx
+│  │  │  │     ├─ GapStartOverlay.tsx
+│  │  │  │     ├─ ApprovalOverlay.tsx
+│  │  │  │     └─ RecoveryNotificationOverlay.tsx
 │  │  │  ├─ pages/
 │  │  │  │  ├─ DashboardPage.tsx
 │  │  │  │  ├─ RecoveryPage.tsx
@@ -407,6 +436,7 @@ continuity-agent/
 │  │  │  │  ├─ commands/
 │  │  │  │  │  ├─ activity.rs
 │  │  │  │  │  ├─ privacy.rs
+│  │  │  │  │  ├─ overlay.rs
 │  │  │  │  │  └─ mod.rs
 │  │  │  │  ├─ observer/
 │  │  │  │  │  ├─ active_window.rs
@@ -1446,6 +1476,10 @@ Responsibilities:
 - Manage local SQLite storage
 - Implement blocked-app and privacy filters
 - Provide the Observation API integration interface
+- Create and configure the native Quick Overlay Tauri window
+- Configure always-on-top, frameless behavior, size, and bottom-right positioning
+- Implement native commands for showing, hiding, and positioning the overlay
+- Own all changes to Tauri window configuration and capabilities
 
 Definition of done:
 
@@ -1453,6 +1487,9 @@ Definition of done:
 - No events are created for blocked applications.
 - A sanitized ActivityEvent array is produced.
 - A mock event generator can replace the native observer.
+- The Quick Overlay can be shown and hidden through Tauri commands.
+- The overlay appears above other applications without replacing the Main Window.
+- The overlay can load the React overlay entry point using mock data.
 
 ## 17.3 Member 2 — Product & Frontend
 
@@ -1472,6 +1509,11 @@ Required screens:
 - Action approval and rejection
 - Recovery brief
 - Permission settings
+- Quick Overlay
+  - Goal confirmation
+  - Gap start confirmation
+  - Action approval and rejection
+  - Recovery notification
 
 Definition of done:
 
@@ -1479,6 +1521,18 @@ Definition of done:
 - API access is isolated in `features/*/api.ts`.
 - Loading, error, and empty states are handled.
 - SSE events update the UI correctly.
+- The complete Quick Overlay flow works with mock JSON.
+- The overlay supports goal confirmation, gap start confirmation, approval, and recovery notification states.
+- The overlay can open the corresponding detailed screen in the Main Window.
+- The overlay UI can be tested independently before native Tauri window integration.
+
+Quick Overlay rules:
+
+- The Quick Overlay is a separate lightweight Tauri window.
+- Member 2 owns only the React UI, UI state, and user interactions rendered inside the overlay.
+- Overlay components must reuse the existing feature APIs, shared contracts, Zustand stores, and design tokens.
+- Business logic must not be duplicated between the Main Window and the Quick Overlay.
+- Detailed views remain available in the Main Window.
 
 ## 17.4 Member 3 — Backend & Data
 
@@ -1990,6 +2044,91 @@ Recommended Next Step
 Review the QR stability outline — about 10 minutes
 ```
 
+## 24.6 Quick Overlay
+
+The Quick Overlay is a separate lightweight Tauri window for short, time-sensitive interactions while the user is working in another application.
+
+It is part of the MVP and is not optional.
+
+### Overlay Principles
+
+- The overlay does not replace the Main Window.
+- The overlay must show only one interaction at a time.
+- Detailed information must remain in the Main Window.
+- The overlay must not contain independent business logic.
+- It must reuse the same feature APIs, Zustand state, shared contracts, and design tokens as the Main Window.
+- Closing or dismissing the overlay must not lose the current goal, gap session, action, or recovery state.
+- The user must always be able to open the relevant detailed Main Window screen.
+
+### Overlay States
+
+The MVP supports exactly four overlay states:
+
+1. `GOAL_CONFIRMATION`
+2. `GAP_START_CONFIRMATION`
+3. `APPROVAL_REQUIRED`
+4. `RECOVERY_READY`
+
+### Goal Confirmation Overlay
+
+Show:
+
+- Up to three inferred goal candidates
+- Confidence for each candidate
+- A short evidence summary
+- Select action
+- Enter a different goal action
+- Open details in the Main Window
+
+### Gap Start Confirmation Overlay
+
+Show:
+
+- Confirmed current goal
+- Latest checkpoint summary
+- Start Gap action
+- Cancel action
+
+### Approval Overlay
+
+Show:
+
+- Requested action
+- Reason
+- External impact
+- Reversibility
+- Approve action
+- Reject action
+- Open full details in the Main Window
+
+### Recovery Notification Overlay
+
+Show:
+
+- Gap duration
+- Previous goal
+- Number of completed actions
+- Whether any external effect occurred
+- Recommended next action
+- Resume action
+- Open Full Recovery Brief action
+
+### Display Rules
+
+- Goal confirmation appears only when the Goal Interpreter requires user confirmation.
+- Gap start confirmation appears only after a manual Gap Start request or an enabled inactivity suggestion.
+- Approval appears only for an action in `WAITING_APPROVAL`.
+- Recovery notification appears when the `recovery.ready` event is received.
+- Only one overlay state may be visible at a time.
+- Overlay priority is:
+
+```text
+APPROVAL_REQUIRED
+→ RECOVERY_READY
+→ GAP_START_CONFIRMATION
+→ GOAL_CONFIRMATION
+```
+
 ---
 
 # 25. Success Metrics
@@ -2047,6 +2186,11 @@ Review the QR stability outline — about 10 minutes
 - [ ] Blocked-app filter
 - [ ] ActivityEvent generation
 - [ ] Mock observer fallback
+- [ ] Quick Overlay native window
+- [ ] Always-on-top behavior
+- [ ] Overlay show and hide commands
+- [ ] Bottom-right window positioning
+- [ ] Main Window fallback when overlay fails
 
 ## Frontend
 
@@ -2056,6 +2200,13 @@ Review the QR stability outline — about 10 minutes
 - [ ] Approval dialog
 - [ ] Recovery brief
 - [ ] SSE integration
+- [ ] Goal confirmation overlay
+- [ ] Gap start confirmation overlay
+- [ ] Approval overlay
+- [ ] Recovery notification overlay
+- [ ] Overlay state priority handling
+- [ ] Open detailed Main Window screen from overlay
+- [ ] Shared API, state, and design-token reuse
 
 ## Backend
 
