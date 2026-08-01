@@ -73,6 +73,9 @@ button:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
 .sidebar-bottom { margin-top: auto; }
 .privacy-note { font-size: 11px; line-height: 1.7; color: var(--color-primary-soft); border-top: 1px solid var(--color-primary-border); padding: 18px 10px 0; margin-top: 20px; }
 .privacy-note span { color: var(--color-on-dark-subtle); }
+.artifact-card pre { white-space: pre-wrap; font: inherit; line-height: 1.6; background: var(--color-surface-subtle); padding: 16px; border-radius: 8px; }
+.artifact-card textarea { width: 100%; box-sizing: border-box; padding: 12px; font: inherit; line-height: 1.5; }
+.artifact-actions { display: flex; gap: 8px; margin-top: 12px; }
 
 .content { max-width: 1100px; width: 100%; padding: 48px 7%; margin: auto; }
 .topbar { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 38px; }

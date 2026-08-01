@@ -10,6 +10,10 @@ Goal identification runs every twenty seconds and prompts after one high-confide
 
 The desktop process itself is excluded before observations enter the upload queue so opening Continuity cannot alter or reset inferred user intent.
 
+Safe draft-producing actions create persisted internal artifacts. TODO drafts, message drafts (including downgraded send-email actions), and organized reference notes are returned with the runtime response and stored against their Gap and action. Recovery displays full active artifact content and supports copy, edit, and discard. Artifact edits remain internal and have no external effect.
+
+Artifact endpoints follow the existing API composition: `GET /api/v1/gaps/:gapId/artifacts`, `GET /api/v1/artifacts/:artifactId`, and idempotent `PATCH /api/v1/artifacts/:artifactId`.
+
 The desktop workflow controller is the authoritative owner of backend-returned IDs and lifecycle objects. The observation session remains responsible for inference scheduling and persistence. Direct HTTP responses are authoritative for user-triggered mutations; broad SSE synchronization is deferred because the current lifecycle is synchronous and does not require it.
 
 ## Environment

@@ -39,7 +39,7 @@ function registerDesktopCors(app: FastifyInstance): void {
       return;
     }
     reply.header("access-control-allow-origin", origin);
-    reply.header("access-control-allow-methods", "GET, POST, OPTIONS");
+    reply.header("access-control-allow-methods", "GET, POST, PATCH, OPTIONS");
     reply.header("access-control-allow-headers", "accept, content-type, idempotency-key, last-event-id");
     reply.header("vary", "Origin");
     if (request.method === "OPTIONS") await reply.code(204).send();

@@ -85,6 +85,18 @@ export const idempotencyRecords = pgTable("idempotency_records", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
 
+export const artifacts = pgTable("artifacts", {
+  artifactId: text("artifact_id").primaryKey(),
+  gapId: text("gap_id").notNull(),
+  actionId: text("action_id").notNull(),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  status: text("status").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+});
+
 export const dbSchema = {
   activityEvents,
   goalInferences,
@@ -95,5 +107,6 @@ export const dbSchema = {
   gapActions,
   recoveryBriefs,
   actionResults,
+  artifacts,
   idempotencyRecords,
 };

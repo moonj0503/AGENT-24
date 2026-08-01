@@ -2,6 +2,7 @@ import type {
   ActivityEvent,
   ActionPlan,
   ActionResult,
+  Artifact,
   Checkpoint,
   GapSession,
   Goal,
@@ -39,6 +40,10 @@ export interface WorkflowRepository {
   getAction(gapId: string, actionId: string): Promise<PlannedAction | null>;
   updateAction(gapId: string, action: PlannedAction, decision?: "APPROVE" | "REJECT", reason?: string): Promise<void>;
   saveActionResult(gapId: string, result: ActionResult): Promise<void>;
+  saveArtifacts(artifacts: readonly Artifact[]): Promise<void>;
+  getArtifact(artifactId: string): Promise<Artifact | null>;
+  listArtifacts(gapId: string): Promise<readonly Artifact[]>;
+  updateArtifact(artifact: Artifact): Promise<void>;
   listGapActions(gapId: string): Promise<readonly StoredGapAction[]>;
   saveRecoveryBrief(recoveryBrief: RecoveryBrief): Promise<void>;
   getRecoveryBrief(gapId: string): Promise<RecoveryBrief | null>;
