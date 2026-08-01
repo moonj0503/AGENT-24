@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { confirmGoal, selectGoal } from "../features/goals/api";
+import { confirmGoal, confirmManualGoal, selectGoal } from "../features/goals/api";
 import { dismissOverlayWithAnimation, openOverlay, useOverlaySnapshot } from "./overlay-store";
 import { OverlayRoot } from "./OverlayRoot";
 import { emitTauriEvent, listenForTauriEvent, openMainWindow, TAURI_EVENTS } from "../lib/tauri";
@@ -33,7 +33,9 @@ export function OverlayApp() {
   const inference = snapshot.inference;
   async function confirmCandidate(goal: GoalCandidate): Promise<void> {
     if (!inference) throw new Error("The Goal inference is no longer available.");
-    const confirmed = await confirmGoal(inference, goal.candidateId);
+    const confirmed = goal.candidateId.startsWith("manual-")
+      ? await confirmManualGoal(inference, goal.title, goal.suggestedGoalPath)
+      : await confirmGoal(inference, goal.candidateId);
     setConfirmedGoal(confirmed);
     clearPendingGoalConfirmation();
     await emitTauriEvent(TAURI_EVENTS.GOAL_CONFIRMED, { goal: confirmed });

@@ -44,3 +44,14 @@ export async function confirmGoal(inference: GoalInferenceResult, candidateId: s
     body: JSON.stringify(request),
   }));
 }
+
+export async function confirmManualGoal(inference: GoalInferenceResult, title: string, path = ["User-defined goal"]): Promise<Goal> {
+  const request = ConfirmGoalRequestSchema.parse({
+    inferenceId: inference.inferenceId,
+    selection: { type: "MANUAL", title: title.trim(), path },
+  });
+  return GoalSchema.parse(await apiRequest("/goals/confirm", {
+    method: "POST",
+    body: JSON.stringify(request),
+  }));
+}
