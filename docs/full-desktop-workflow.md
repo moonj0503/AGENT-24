@@ -2,7 +2,13 @@
 
 The production desktop composes the existing components in this order:
 
-`Windows activity → observation upload → Goal inference → explicit Goal confirmation → Checkpoint → GapSession → Runtime → Policy → Tools/approval → Gap end → Recovery → History`
+`Start Gap Mode → Windows activity → observation upload → Goal inference → explicit Goal confirmation → Checkpoint → GapSession → Runtime → Policy → Tools/approval → Gap end → Recovery → History`
+
+The initial desktop action creates only a local pending Gap intent. Observation for Goal identification starts at that point, clears stale queued inference for the intent, and continues until the Gap ends. No backend GapSession and no continuity action exist before explicit Goal confirmation. Cancelling confirmation stops the pending observation. This preserves the existing backend lifecycle and contracts while making Gap Mode the user-facing entry point.
+
+Goal identification runs every twenty seconds and still requires two stable matching inference results before prompting the user. With consistent activity, confirmation is normally available after roughly forty seconds. Failed inference attempts remain queued for retry and surface a temporary availability warning in the desktop.
+
+The desktop process itself is excluded before observations enter the upload queue so opening Continuity cannot alter or reset inferred user intent.
 
 The desktop workflow controller is the authoritative owner of backend-returned IDs and lifecycle objects. The observation session remains responsible for inference scheduling and persistence. Direct HTTP responses are authoritative for user-triggered mutations; broad SSE synchronization is deferred because the current lifecycle is synchronous and does not require it.
 
@@ -21,8 +27,8 @@ pnpm --filter @continuity/desktop dev
 
 1. Start the database and API with `AGENT_PROVIDER=fixture`.
 2. Start the Tauri desktop and verify sanitized activity reaches observation ingestion.
-3. Wait for a stable inference and confirm the Goal overlay.
-4. Start Gap Mode and verify the returned Checkpoint, GapSession, and ActionPlan IDs in the API/database.
+3. Start Gap Mode and continue working while the desktop identifies a stable Goal.
+4. Confirm the Goal overlay, then verify the returned Checkpoint, GapSession, and ActionPlan IDs in the API/database.
 5. Approve or reject any approval-gated action and verify the action/result state refreshes from History.
 6. End the Gap and verify the same real RecoveryBrief appears in the native overlay and main Recovery screen.
 7. Open History and verify the completed Gap.

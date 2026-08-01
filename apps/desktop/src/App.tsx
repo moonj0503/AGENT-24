@@ -8,12 +8,11 @@ import { useDesktopWorkflowState } from "./features/workflow/store";
 import { getDesktopWorkflowController } from "./features/workflow/controller";
 import { GapStartOverlay } from "./overlay/components/GapStartOverlay";
 import { ApprovalOverlay } from "./overlay/components/ApprovalOverlay";
-import { dismissOverlay, setApprovalRequired, setGapStartConfirmation, useOverlaySnapshot } from "./overlay/overlay-store";
+import { dismissOverlay, setApprovalRequired, useOverlaySnapshot } from "./overlay/overlay-store";
 import { isNativeOverlayAvailable, listenForTauriEvent, showOverlayForEvent, showRecoveryOverlay, TAURI_EVENTS } from "./lib/tauri";
 import { OverlayRoot } from "./overlay/OverlayRoot";
 import { getDesktopObservationWorkflow } from "./features/observation/desktop-session";
-import { candidateSignature } from "./features/observation/stability";
-import { OBSERVATION_WORKFLOW_ERROR_EVENT } from "./features/observation/types";
+import { GOAL_CONFIRMATION_REQUESTED_EVENT, OBSERVATION_WORKFLOW_ERROR_EVENT, type GoalConfirmationRequested } from "./features/observation/types";
 
 type Screen = "dashboard" | "goal" | "gap" | "recovery" | "permissions" | "history";
 
@@ -31,8 +30,15 @@ export function App() {
     void fetchPermissionRules().then(setRules).catch((cause) => setError(messageOf(cause, "Unable to load permissions.")));
     const openScreen = (event: Event) => { const next = (event as CustomEvent<Screen>).detail; if (next) setScreen(next); };
     const workflowError = (event: Event) => setError((event as CustomEvent<string>).detail);
+    const goalRequested = (event: Event) => {
+      const request = (event as CustomEvent<GoalConfirmationRequested>).detail;
+      if (!request) return;
+      setInference(request.inference);
+      setSelectedCandidate(request.candidate);
+    };
     window.addEventListener("continuity:open-main-screen", openScreen);
     window.addEventListener(OBSERVATION_WORKFLOW_ERROR_EVENT, workflowError);
+    window.addEventListener(GOAL_CONFIRMATION_REQUESTED_EVENT, goalRequested);
     let active = true;
     const cleanups: Array<() => void> = [];
     const attach = async () => {
@@ -41,25 +47,18 @@ export function App() {
       cleanups.push(await listenForTauriEvent(TAURI_EVENTS.ACTION_APPROVAL_DECIDED, ({ actionId, decision }) => { if (active) void decideAction(actionId, decision); }));
     };
     void attach();
-    return () => { active = false; cleanups.forEach((cleanup) => cleanup()); window.removeEventListener("continuity:open-main-screen", openScreen); window.removeEventListener(OBSERVATION_WORKFLOW_ERROR_EVENT, workflowError); };
+    return () => { active = false; cleanups.forEach((cleanup) => cleanup()); window.removeEventListener("continuity:open-main-screen", openScreen); window.removeEventListener(OBSERVATION_WORKFLOW_ERROR_EVENT, workflowError); window.removeEventListener(GOAL_CONFIRMATION_REQUESTED_EVENT, goalRequested); };
   }, []);
 
-  function requestGoalConfirmation() {
-    const latest = getDesktopObservationWorkflow()?.session.getSnapshot().latestInference;
-    setInference(latest);
-    const candidate = latest?.candidates[0];
-    const bridge = getDesktopObservationWorkflow()?.confirmationBridge;
-    if (!latest || !candidate || !bridge) { setError("No observed Goal candidates are ready yet."); setScreen("goal"); return; }
-    void bridge.requestConfirmation({ type: "GoalConfirmationRequested", inference: latest, candidate, candidateSignature: candidateSignature(candidate), requestedAt: Date.now() });
-  }
-
-  function requestGapStart() {
-    const bridge = getDesktopObservationWorkflow()?.confirmationBridge;
-    if (!bridge) { setError("Goal confirmation is not ready."); return; }
-    void bridge.requestGapStart(async () => {
-      setGapStartConfirmation();
-      if (isNativeOverlayAvailable()) await showOverlayForEvent(TAURI_EVENTS.GAP_START_CONFIRMATION, {});
-    });
+  async function requestGapStart() {
+    const observation = getDesktopObservationWorkflow();
+    if (!observation) { setError("Goal identification is not ready."); return; }
+    setError(undefined);
+    try {
+      await observation.beginGapMode();
+    } catch (cause) {
+      setError(messageOf(cause, "Unable to begin Gap Mode."));
+    }
   }
 
   async function confirmGapStart(): Promise<void> {
@@ -75,6 +74,7 @@ export function App() {
     setError(undefined);
     try {
       const brief = await requiredController().endGap();
+      await getDesktopObservationWorkflow()?.endGapMode();
       setScreen("recovery");
       if (isNativeOverlayAvailable()) await showRecoveryOverlay(brief);
     } catch (cause) { setError(messageOf(cause, "Unable to prepare recovery.")); }
@@ -99,7 +99,7 @@ export function App() {
     </aside>
     <main className="content"><header className="topbar"><div><p className="eyebrow">{new Intl.DateTimeFormat(undefined, { dateStyle: "full" }).format(new Date()).toUpperCase()}</p><h1>{screenTitle(screen)}</h1></div><span className="demo-pill">WORKFLOW ACTIVE</span></header>
       {(error ?? workflow.error) && <div className="error" role="alert">{error ?? workflow.error}<button onClick={() => setError(undefined)}>Dismiss</button></div>}
-      {screen === "dashboard" && <Dashboard busy={workflow.pending} goalTitle={workflow.confirmedGoal?.title} path={selectedPath} phase={workflow.phase} onConfirm={requestGoalConfirmation} onStart={requestGapStart} />}
+      {screen === "dashboard" && <Dashboard busy={workflow.pending} goalTitle={workflow.confirmedGoal?.title} path={selectedPath} phase={workflow.phase} onStart={() => void requestGapStart()} />}
       {screen === "goal" && <GoalSelection result={inference} selected={selectedCandidate} onSelect={(id) => setSelectedCandidate(inference ? selectGoal(inference, id) : undefined)} onContinue={async () => { if (!selectedCandidate) return; await requiredBridge().confirmCandidate(selectedCandidate.candidateId); setScreen("dashboard"); }} />}
       {screen === "gap" && <GapView busy={workflow.pending} gap={gap} onAction={requestApproval} onFinish={finishGap} />}
       {screen === "recovery" && <RecoveryView brief={workflow.recoveryBrief} onDashboard={() => setScreen("dashboard")} />}
@@ -118,7 +118,7 @@ function toGapData(state: ReturnType<typeof useDesktopWorkflowState>): GapData |
 function messageOf(cause: unknown, fallback: string) { return cause instanceof Error ? cause.message : fallback; }
 function screenTitle(screen: Screen) { return screen === "dashboard" ? "Continuity workspace" : screen === "goal" ? "Confirm your goal" : screen === "gap" ? "Gap Mode" : screen === "recovery" ? "Welcome back" : screen === "history" ? "History" : "Permissions"; }
 function NavItem({ active, onClick, children }: { active: boolean; onClick: () => void; children: string }) { return <button className={`nav-item ${active ? "active" : ""}`} onClick={onClick}>{children}</button>; }
-function Dashboard({ busy, goalTitle, path, phase, onConfirm, onStart }: { busy: boolean; goalTitle?: string; path: string; phase: string; onConfirm: () => void; onStart: () => void }) { return <section className="stack"><section className="hero"><div><span className="status-dot" /> Observation workflow connected<h2>{goalTitle ?? "Protect your train of thought."}</h2><p>{goalTitle ? `Confirmed Goal: ${path}` : "Observe your work, then review the inferred Goal when it is ready."}</p></div></section><section className="card"><p className="eyebrow">CURRENT WORKFLOW</p><h3>{goalTitle ?? "Goal confirmation needed"}</h3><p className="path">{path}</p><p>State: {phase}</p>{goalTitle ? <button className="button primary" onClick={onStart} disabled={busy}>Start Gap Mode</button> : <button className="button primary" onClick={onConfirm} disabled={busy}>Review observed goal</button>}</section></section>; }
+function Dashboard({ busy, goalTitle, path, phase, onStart }: { busy: boolean; goalTitle?: string; path: string; phase: string; onStart: () => void }) { const identifying = phase === "IDENTIFYING_GOAL" || phase === "GOAL_CONFIRMATION"; const active = ["STARTING_GAP", "GAP_ACTIVE", "AWAITING_APPROVAL", "ENDING_GAP"].includes(phase); return <section className="stack"><section className="hero"><div><span className="status-dot" /> Observation workflow connected<h2>{identifying ? "Identifying what you're working on…" : goalTitle ?? "Protect your train of thought."}</h2><p>{identifying ? "Keep working normally. You'll choose a Goal before any continuity actions run." : goalTitle ? `Previous Goal: ${path}` : "Start Gap Mode, then work normally while candidates are identified."}</p></div></section><section className="card"><p className="eyebrow">CURRENT WORKFLOW</p><h3>{identifying ? "Watching for a stable Goal" : active ? "Gap Mode is active" : "Ready when you are"}</h3><p>State: {phase}</p><button className="button primary" onClick={onStart} disabled={busy || identifying || active}>{identifying ? "Identifying Goal…" : active ? "Gap Mode active" : "Start Gap Mode"}</button></section></section>; }
 function GoalSelection({ result, selected, onSelect, onContinue }: { result?: GoalInferenceResult; selected?: GoalCandidate; onSelect: (id: string) => void; onContinue: () => void | Promise<void> }) { return <section className="stack"><p className="lead">Choose an observed Goal candidate.</p>{result?.candidates.map((candidate) => <button className={`goal-option ${selected?.candidateId === candidate.candidateId ? "selected" : ""}`} key={candidate.candidateId} onClick={() => onSelect(candidate.candidateId)}><span><strong>{candidate.title}</strong><small>{candidate.description}</small></span><b>{Math.round(candidate.confidence * 100)}%</b></button>)}{!result && <EmptyState label="No observed Goal candidates are available yet." />}{selected && <button className="button primary" onClick={() => void onContinue()}>Confirm this goal</button>}</section>; }
 function GapView({ busy, gap, onAction, onFinish }: { busy: boolean; gap?: GapData; onAction: (id: string) => void; onFinish: () => void }) { return <section className="stack"><div className="gap-banner"><span className="pulse" /> Continuity runtime active<h2>{gap?.plan.continuityObjective ?? "Start Gap Mode from the dashboard."}</h2></div>{gap?.plan.actions.map((action) => { const result = gap.actionResults.find((item) => item.actionId === action.actionId); const status = result?.status ?? action.status; return <div className="action-row" key={action.actionId}><span><strong>{action.title}</strong><small>{result?.summary ?? action.reason}</small></span><span className="action-control">{action.status === "WAITING_APPROVAL" ? <button onClick={() => onAction(action.actionId)}>Review approval</button> : status.toLowerCase()}</span></div>; })}<button className="button primary" onClick={onFinish} disabled={busy || !gap}>End Gap &amp; view recovery</button></section>; }
 function RecoveryView({ brief, onDashboard }: { brief?: RecoveryBrief; onDashboard: () => void }) { return <section className="stack">{brief ? <><div className="recovery-banner"><span className="status-dot" /> Your context is restored<h2>{brief.goalBeforeGap}</h2></div><ListCard title="Completed" items={brief.completedActions} /><ListCard title="Pending" items={brief.pendingActions} /><ListCard title="External effects" items={brief.externalEffects.length ? brief.externalEffects : ["None"]} /><div className="next-step"><strong>{brief.recommendedNextAction.title}</strong></div><button className="button primary" onClick={onDashboard}>Return to dashboard</button></> : <EmptyState label="Complete a Gap to see its recovery brief." />}</section>; }

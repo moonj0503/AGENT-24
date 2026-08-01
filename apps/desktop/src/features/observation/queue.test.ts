@@ -13,6 +13,10 @@ describe("durable observation queue", () => {
   it("blocks normalized application identifiers before queueing", () => {
     expect(isApplicationBlocked(event("a", "2026-08-01T00:00:00.000Z", " Secret App "), ["secret app"])).toBe(true);
   });
+  it("always blocks the Continuity desktop process from its own observations", () => {
+    expect(isApplicationBlocked(event("self", "2026-08-01T00:00:00.000Z", " Continuity-Desktop "), [])).toBe(true);
+    expect(isApplicationBlocked(event("other", "2026-08-01T00:00:00.000Z", "Continuity Notes"), [])).toBe(false);
+  });
   it("creates stable batch keys without sensitive payloads", async () => {
     expect(await observationBatchKey("session", ["b", "a"])).toBe(await observationBatchKey("session", ["a", "b"]));
     expect(await observationBatchKey("session", ["a"])).not.toBe(await observationBatchKey("session", ["b"]));

@@ -5,7 +5,7 @@ import {
   type ActivityEvent,
   type GoalInferenceResult,
 } from "@continuity/contracts";
-import { ObservationSessionController } from "./observation-session-controller";
+import { DEFAULT_OBSERVATION_SESSION_CONFIG, ObservationSessionController } from "./observation-session-controller";
 import { candidateSignature, evaluateStability } from "./stability";
 import type {
   GoalConfirmationRequested,
@@ -76,6 +76,7 @@ function setup(options: {
     return next;
   });
   const confirmations: GoalConfirmationRequested[] = [];
+  const warnings: string[] = [];
   const dependencies: ObservationSessionDependencies = {
     collectActivity,
     upload,
@@ -83,6 +84,7 @@ function setup(options: {
     getConfirmedGoal: () => options.confirmedGoal,
     canRequestConfirmation: () => true,
     onConfirmationRequested: (requested) => confirmations.push(requested),
+    onWarning: (message) => warnings.push(message),
     now: options.now ?? (() => Date.now()),
   };
   return {
@@ -91,6 +93,7 @@ function setup(options: {
     upload,
     infer,
     confirmations,
+    warnings,
   };
 }
 
@@ -105,6 +108,10 @@ afterEach(() => {
 });
 
 describe("ObservationSessionController lifecycle and scheduling", () => {
+  it("checks goal inference every twenty seconds by default", () => {
+    expect(DEFAULT_OBSERVATION_SESSION_CONFIG.inferenceIntervalMs).toBe(20_000);
+  });
+
   it("starts, stops, and does not duplicate timers on repeated start", async () => {
     const session = setup({ observations: [event("event-1", "Report")] });
     expect(session.controller.getSnapshot().status).toBe("STOPPED");
@@ -200,6 +207,7 @@ describe("ObservationSessionController lifecycle and scheduling", () => {
       latestInference: undefined,
       pendingInferenceCount: 1,
     });
+    expect(session.warnings).toContain("Goal identification is temporarily unavailable.");
     await vi.advanceTimersByTimeAsync(50);
     expect(session.infer).toHaveBeenCalledTimes(2);
     expect(session.infer.mock.calls[1]?.[1]).toEqual(["event-1"]);

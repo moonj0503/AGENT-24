@@ -38,14 +38,16 @@ function setup(options: {
   } as unknown as ObservationSessionController;
   const confirm = vi.fn(options.confirm ?? (async () => goal));
   const errors: string[] = [];
+  const cancelled = vi.fn();
   const bridge = new GoalConfirmationBridge({
     controller,
     confirmGoal: confirm,
     now: () => Date.now(),
     snoozeDurationMs: 1_000,
     onError: (message) => errors.push(message),
+    onDeferredGapStartCancelled: cancelled,
   });
-  return { bridge, controller, confirm, errors };
+  return { bridge, controller, confirm, errors, cancelled };
 }
 
 beforeEach(() => {
@@ -118,9 +120,10 @@ describe("GoalConfirmationBridge", () => {
   });
 
   it("Later snoozes, dismisses, and allows requests after the configured duration", async () => {
-    const { bridge, controller } = setup();
+    const { bridge, controller, cancelled } = setup();
     await bridge.requestConfirmation(request);
     bridge.later();
+    expect(cancelled).not.toHaveBeenCalled();
     expect(controller.snooze).toHaveBeenCalledOnce();
     expect(getPendingGoalConfirmationSnapshot().pending).toBeUndefined();
     await expect(bridge.requestConfirmation(request)).resolves.toBe(false);
@@ -170,14 +173,16 @@ describe("GoalConfirmationBridge", () => {
     expect(start).toHaveBeenCalledOnce();
   });
 
-  it("starts normally with a confirmed Goal and does not start after failed confirmation", async () => {
-    const direct = setup();
+  it("requires fresh confirmation even when a previous Goal exists and does not start after failed confirmation", async () => {
+    const previous = setup({ latestInference: inference });
     const start = vi.fn(async () => undefined);
     setConfirmedGoal(goal);
-    await expect(direct.bridge.requestGapStart(start)).resolves.toBe(true);
-    expect(start).toHaveBeenCalledOnce();
+    await expect(previous.bridge.requestGapStart(start)).resolves.toBe(false);
+    expect(start).not.toHaveBeenCalled();
+    expect(getPendingGoalConfirmationSnapshot().pending?.reason).toBe("GAP_START");
 
     clearConfirmedGoal();
+    dismissOverlay();
     const failedStart = vi.fn(async () => undefined);
     const failed = setup({ latestInference: inference, confirm: async () => { throw new Error("No confirmation"); } });
     await failed.bridge.requestGapStart(failedStart);
@@ -185,11 +190,21 @@ describe("GoalConfirmationBridge", () => {
     expect(failedStart).not.toHaveBeenCalled();
   });
 
-  it("reports missing inference instead of starting a Gap", async () => {
+  it("waits for a future inference instead of rejecting Gap start", async () => {
     const { bridge, errors } = setup();
     const start = vi.fn(async () => undefined);
     await expect(bridge.requestGapStart(start)).resolves.toBe(false);
     expect(start).not.toHaveBeenCalled();
-    expect(errors).toEqual(["Confirm a Goal before starting Gap Mode."]);
+    expect(errors).toEqual([]);
+    await bridge.requestConfirmation(request);
+    await bridge.confirmCandidate(candidate.candidateId);
+    expect(start).toHaveBeenCalledOnce();
+  });
+
+  it("cancels the pending Gap intent when Goal confirmation is deferred", async () => {
+    const { bridge, cancelled } = setup({ latestInference: inference });
+    await bridge.requestGapStart(vi.fn(async () => undefined));
+    bridge.later();
+    expect(cancelled).toHaveBeenCalledOnce();
   });
 });
