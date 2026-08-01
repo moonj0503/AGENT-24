@@ -58,19 +58,38 @@ const input: RecoveryContext = {
 };
 
 describe("FixtureRecoveryGenerator", () => {
-  it("returns the frozen contract-valid recovery brief with all fields and ordering preserved", async () => {
+  it("returns a contract-valid recovery brief contextualized to the current Gap", async () => {
     const result = await new FixtureRecoveryGenerator().run(input);
     const frozenFixture = RecoveryBriefSchema.parse(await loadFrozenRecoveryBriefFixture());
 
     expect(RecoveryBriefSchema.parse(result)).toEqual(result);
-    expect(result).toEqual(frozenFixture);
-    expect(result.gapId).toBe(frozenFixture.gapId);
-    expect(result.goalBeforeGap).toBe(frozenFixture.goalBeforeGap);
+    expect(result).toEqual({
+      ...frozenFixture,
+      briefId: `brief-${input.gapSession.gapId}`,
+      gapId: input.gapSession.gapId,
+      goalBeforeGap: input.goal.path.join(" → "),
+    });
+    expect(result.briefId).toBe(`brief-${input.gapSession.gapId}`);
+    expect(result.gapId).toBe(input.gapSession.gapId);
+    expect(result.goalBeforeGap).toBe(input.goal.path.join(" → "));
     expect(result.completedActions).toEqual(frozenFixture.completedActions);
     expect(result.pendingActions).toEqual(frozenFixture.pendingActions);
     expect(result.externalEffects).toEqual([]);
     expect(result.recommendedNextAction).toEqual(frozenFixture.recommendedNextAction);
     expect(Number.isNaN(Date.parse(result.createdAt))).toBe(false);
+  });
+
+  it("does not reuse the fixture Gap identifier for another GapSession", async () => {
+    const otherGapId = "gap-runtime-002";
+    const result = await new FixtureRecoveryGenerator().run({
+      ...input,
+      gapSession: { ...input.gapSession, gapId: otherGapId },
+    });
+
+    expect(result).toMatchObject({
+      briefId: `brief-${otherGapId}`,
+      gapId: otherGapId,
+    });
   });
 
   it("returns fresh data so caller mutation does not affect a later run", async () => {
@@ -103,17 +122,25 @@ describe("FixtureRecoveryGenerator", () => {
     expect(input).toEqual(inputSnapshot);
   });
 
-  it("loads only the recovery fixture and does not invoke Policy or Tools", async () => {
+  it("loads the recovery fixture and reads only the context needed to assign identifiers", async () => {
     const fixture = await loadFrozenRecoveryBriefFixture();
     const loadFixture = vi.fn(async () => fixture);
     const generator = new FixtureRecoveryGenerator(loadFixture);
     const guardedInput = new Proxy(input, {
-      get() {
+      get(target, property) {
+        if (property === "goal" || property === "gapSession") {
+          return Reflect.get(target, property);
+        }
         throw new Error("The fixture generator must not orchestrate context dependencies.");
       },
     });
 
-    await expect(generator.run(guardedInput)).resolves.toEqual(RecoveryBriefSchema.parse(fixture));
+    await expect(generator.run(guardedInput)).resolves.toEqual({
+      ...RecoveryBriefSchema.parse(fixture),
+      briefId: `brief-${input.gapSession.gapId}`,
+      gapId: input.gapSession.gapId,
+      goalBeforeGap: input.goal.path.join(" → "),
+    });
 
     expect(loadFixture).toHaveBeenCalledOnce();
     expect(loadFixture).toHaveBeenCalledWith();

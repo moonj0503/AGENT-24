@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { createDatabase } from "@continuity/db";
 import {
   type ActionPlan,
+  type ActionResult,
   type Checkpoint,
   type GapSession,
   GoalInferenceResultSchema,
@@ -37,6 +38,7 @@ describe.skipIf(!databaseUrl)("PostgreSQL WorkflowRepository", () => {
 
   afterAll(async () => {
     await sql.unsafe("DELETE FROM recovery_briefs WHERE brief_id = $1", [ids.briefId]);
+    await sql.unsafe("DELETE FROM action_results WHERE gap_id = $1", [ids.gapId]);
     await sql.unsafe("DELETE FROM gap_actions WHERE gap_id = $1", [ids.gapId]);
     await sql.unsafe("DELETE FROM action_plans WHERE plan_id = $1", [ids.planId]);
     await sql.unsafe("DELETE FROM gap_sessions WHERE gap_id = $1", [ids.gapId]);
@@ -142,6 +144,20 @@ describe.skipIf(!databaseUrl)("PostgreSQL WorkflowRepository", () => {
     await repository.updateAction(gap.gapId, { ...action, status: "EXECUTING" }, "APPROVE");
     expect(await repository.getAction(gap.gapId, ids.actionId)).toMatchObject({ status: "EXECUTING" });
 
+    const actionResult: ActionResult = {
+      actionId: ids.actionId,
+      status: "COMPLETED",
+      summary: "The action completed during the integration test.",
+      externalEffect: "NONE",
+      occurredAt: "2026-08-01T09:19:00.000Z",
+    };
+    await repository.saveActionResult(gap.gapId, actionResult);
+    expect(await repository.listGapActions(gap.gapId)).toEqual([{
+      action: { ...action, status: "EXECUTING" },
+      decision: "APPROVE",
+      result: actionResult,
+    }]);
+
     const recoveryBrief: RecoveryBrief = {
       briefId: ids.briefId,
       gapId: gap.gapId,
@@ -155,5 +171,7 @@ describe.skipIf(!databaseUrl)("PostgreSQL WorkflowRepository", () => {
     await repository.saveRecoveryBrief(recoveryBrief);
     const rows = await sql.unsafe("SELECT brief_id FROM recovery_briefs WHERE brief_id = $1", [ids.briefId]);
     expect(rows).toHaveLength(1);
+    expect(await repository.getRecoveryBrief(gap.gapId)).toEqual(recoveryBrief);
+    expect(await repository.listGapSessions("PLANNING")).toContainEqual(gap);
   });
 });

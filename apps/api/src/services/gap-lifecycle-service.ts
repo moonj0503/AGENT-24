@@ -17,12 +17,16 @@ import { ApiHttpError } from "../plugins/error-handler.js";
 import type { WorkflowRepository } from "../repositories/workflow-repository.js";
 import type { Clock } from "./gap-recovery-service.js";
 import { systemClock } from "./gap-recovery-service.js";
+import { DeterministicPolicyEngine, type PolicyEngine } from "../policy/index.js";
+import { ToolExecutor } from "../tools/index.js";
 
 export class GapLifecycleService {
   constructor(
     private readonly repository: WorkflowRepository,
     private readonly events: AgentEventPublisher,
     private readonly clock: Clock = systemClock,
+    private readonly policy: PolicyEngine = new DeterministicPolicyEngine(),
+    private readonly tools: ToolExecutor = new ToolExecutor(),
   ) {}
 
   async createCheckpoint(request: CreateCheckpointRequest): Promise<Checkpoint> {
@@ -87,12 +91,16 @@ export class GapLifecycleService {
       throw new ApiHttpError("INVALID_STATE_TRANSITION", "The planned action is not waiting for a decision.");
     }
 
-    const updated = PlannedActionSchema.parse({
-      ...action,
-      status: request.decision === "APPROVE" ? "EXECUTING" : "REJECTED",
-    });
+    let result;
+    let updated = PlannedActionSchema.parse({ ...action, status: request.decision === "APPROVE" ? "EXECUTING" : "REJECTED" });
+    if (request.decision === "APPROVE") {
+      const evaluation = this.policy.evaluate(action);
+      result = await this.tools.executeApproved(updated, evaluation, { occurredAt: this.clock.now() });
+      updated = PlannedActionSchema.parse({ ...updated, status: result.status });
+    }
     try {
       await this.repository.updateAction(params.gapId, updated, request.decision, request.reason);
+      if (result) await this.repository.saveActionResult(params.gapId, result);
     } catch (cause) {
       throw new ApiHttpError("DATABASE_FAILURE", "The planned action could not be updated.", { cause });
     }
@@ -101,7 +109,7 @@ export class GapLifecycleService {
       type: "ACTION_UPDATED",
       gapId: params.gapId,
       occurredAt: this.clock.now(),
-      payload: { action: updated, decision: request.decision, reason: request.reason },
+      payload: { action: updated, decision: request.decision, reason: request.reason, ...(result ? { result } : {}) },
     });
     return updated;
   }

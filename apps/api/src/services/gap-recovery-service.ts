@@ -12,6 +12,7 @@ import {
 import type { AgentEventPublisher } from "../features/workflow/event-bus.js";
 import { ApiHttpError } from "../plugins/error-handler.js";
 import type { WorkflowRepository } from "../repositories/workflow-repository.js";
+import { createActionArtifacts } from "../tools/index.js";
 
 export interface Clock {
   now(): string;
@@ -60,9 +61,13 @@ export class GapRecoveryService {
       throw new ApiHttpError("AGENT_FAILURE", "The recovery runtime could not complete.", { cause });
     }
 
+    const artifacts = createActionArtifacts(gapSession.gapId, result.actionPlan, result.actionResults);
     try {
       await this.repository.saveActionPlan(result.actionPlan);
+      await Promise.all(result.actionResults.map((actionResult) =>
+        this.repository.saveActionResult(gapSession.gapId, actionResult)));
       await this.repository.saveRecoveryBrief(result.recoveryBrief);
+      await this.repository.saveArtifacts(artifacts);
     } catch (cause) {
       throw new ApiHttpError("DATABASE_FAILURE", "The recovery result could not be saved.", { cause });
     }
@@ -77,6 +82,7 @@ export class GapRecoveryService {
       actionPlan: result.actionPlan,
       actionResults: [...result.actionResults],
       recoveryBrief: result.recoveryBrief,
+      artifacts,
     };
   }
 

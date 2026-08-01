@@ -1,6 +1,8 @@
 import type {
   ActivityEvent,
   ActionPlan,
+  ActionResult,
+  Artifact,
   Checkpoint,
   GapSession,
   Goal,
@@ -14,6 +16,13 @@ import type {
 export interface StoredGoalInference {
   readonly workSessionId: string;
   readonly result: GoalInferenceResult;
+}
+
+export interface StoredGapAction {
+  readonly action: PlannedAction;
+  readonly decision?: "APPROVE" | "REJECT";
+  readonly decisionReason?: string;
+  readonly result?: ActionResult;
 }
 
 export interface WorkflowRepository {
@@ -30,5 +39,13 @@ export interface WorkflowRepository {
   saveActionPlan(actionPlan: ActionPlan): Promise<void>;
   getAction(gapId: string, actionId: string): Promise<PlannedAction | null>;
   updateAction(gapId: string, action: PlannedAction, decision?: "APPROVE" | "REJECT", reason?: string): Promise<void>;
+  saveActionResult(gapId: string, result: ActionResult): Promise<void>;
+  saveArtifacts(artifacts: readonly Artifact[]): Promise<void>;
+  getArtifact(artifactId: string): Promise<Artifact | null>;
+  listArtifacts(gapId: string): Promise<readonly Artifact[]>;
+  updateArtifact(artifact: Artifact): Promise<void>;
+  listGapActions(gapId: string): Promise<readonly StoredGapAction[]>;
   saveRecoveryBrief(recoveryBrief: RecoveryBrief): Promise<void>;
+  getRecoveryBrief(gapId: string): Promise<RecoveryBrief | null>;
+  listGapSessions(status?: GapSession["status"]): Promise<readonly GapSession[]>;
 }

@@ -3,6 +3,7 @@ export * from "./goal.js";
 export * from "./checkpoint.js";
 export * from "./gap.js";
 export * from "./action.js";
+export * from "./artifact.js";
 export * from "./recovery.js";
 export * from "./events.js";
 export * from "./http.js";

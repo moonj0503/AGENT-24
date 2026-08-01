@@ -10,7 +10,10 @@ const migrationsUrl = new URL("../migrations/", import.meta.url);
 const migrationNames = (await readdir(migrationsUrl))
   .filter((name) => name.endsWith(".sql"))
   .sort();
-const sql = postgres(databaseUrl);
+const sql = postgres(databaseUrl, {
+  ssl: "require",
+  prepare: false,
+});
 
 try {
   for (const migrationName of migrationNames) {

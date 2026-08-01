@@ -20,7 +20,7 @@ export async function loadFrozenActionPlanFixture(): Promise<unknown> {
 export class FixtureContinuityAgent implements ContinuityAgent {
   constructor(private readonly loadFixture: FixtureLoader = loadFrozenActionPlanFixture) {}
 
-  async run(_input: ContinuityContext): Promise<ActionPlan> {
+  async run(input: ContinuityContext): Promise<ActionPlan> {
     const fixture = await this.loadFixture();
     const result = ActionPlanSchema.safeParse(fixture);
 
@@ -31,6 +31,10 @@ export class FixtureContinuityAgent implements ContinuityAgent {
       );
     }
 
-    return result.data;
+    return ActionPlanSchema.parse({
+      ...result.data,
+      planId: `plan-${input.gapSession.gapId}`,
+      gapId: input.gapSession.gapId,
+    });
   }
 }

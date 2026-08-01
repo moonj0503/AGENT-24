@@ -12,6 +12,9 @@ export function createDatabase(databaseUrl = process.env.DATABASE_URL): {
     throw new Error("DATABASE_URL is required to start the API with PostgreSQL.");
   }
 
-  const sql = postgres(databaseUrl);
+  const sql = postgres(databaseUrl, {
+    ssl: "require",
+    prepare: false,
+  });
   return { db: drizzle(sql, { schema: dbSchema }), sql };
 }

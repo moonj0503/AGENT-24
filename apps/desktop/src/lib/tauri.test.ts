@@ -30,6 +30,16 @@ describe("frontend native integration fallback", () => {
     expect(received).toBe("gap");
   });
 
+  it("delivers only contract-valid approval decisions from the native overlay", async () => {
+    let deliver: ((event: { payload: unknown }) => void) | undefined;
+    const received: unknown[] = [];
+    globalScope.window = { __TAURI__: { event: { listen: async (_name: string, handler: (event: { payload: unknown }) => void) => { deliver = handler; return () => undefined; } } } } as unknown as Window;
+    await listenForTauriEvent(TAURI_EVENTS.ACTION_APPROVAL_DECIDED, (decision) => received.push(decision));
+    deliver?.({ payload: { actionId: "action-real", decision: "APPROVE" } });
+    deliver?.({ payload: { actionId: "action-real", decision: "COMPLETED" } });
+    expect(received).toEqual([{ actionId: "action-real", decision: "APPROVE" }]);
+  });
+
   it("uses the exact native hide command and recovery event payload", async () => {
     const invoked: string[] = [];
     let emitted: { name: string; payload: unknown } | undefined;

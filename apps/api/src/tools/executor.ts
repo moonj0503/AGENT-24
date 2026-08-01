@@ -27,6 +27,16 @@ export class ToolExecutor {
     }
   }
 
+  async executeApproved(action: PlannedAction, evaluation: PolicyEvaluation, context: ToolExecutionContext): Promise<ActionResult> {
+    if (evaluation.decision === "DENY") return rejectedResult(action, context, `Tool execution denied: ${evaluation.reason}`);
+    if (evaluation.decision === "DOWNGRADE") {
+      return evaluation.replacementActionType
+        ? this.executeTool(evaluation.replacementActionType, action, context)
+        : failedResult(action, context, "Policy downgrade did not provide a replacement Tool type.");
+    }
+    return this.executeTool(action.type, action, context);
+  }
+
   private async executeTool(
     type: PlannedAction["type"],
     action: PlannedAction,

@@ -67,6 +67,13 @@ export const recoveryBriefs = pgTable("recovery_briefs", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
 });
 
+export const actionResults = pgTable("action_results", {
+  gapId: text("gap_id").notNull(),
+  actionId: text("action_id").notNull(),
+  resultData: jsonb("result_data").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [primaryKey({ columns: [table.gapId, table.actionId] })]);
+
 export const idempotencyRecords = pgTable("idempotency_records", {
   idempotencyKey: text("idempotency_key").primaryKey(),
   fingerprint: text("fingerprint").notNull(),
@@ -78,6 +85,18 @@ export const idempotencyRecords = pgTable("idempotency_records", {
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
 });
 
+export const artifacts = pgTable("artifacts", {
+  artifactId: text("artifact_id").primaryKey(),
+  gapId: text("gap_id").notNull(),
+  actionId: text("action_id").notNull(),
+  type: text("type").notNull(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  status: text("status").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
+});
+
 export const dbSchema = {
   activityEvents,
   goalInferences,
@@ -87,5 +106,7 @@ export const dbSchema = {
   actionPlans,
   gapActions,
   recoveryBriefs,
+  actionResults,
+  artifacts,
   idempotencyRecords,
 };

@@ -11,4 +11,4 @@ pnpm typecheck
 pnpm --filter @continuity/api dev
 ```
 
-The project is mock-first. Contracts and demo fixtures are frozen in `packages/contracts`; see `docs/team/parallel-development.md` before starting a feature branch. The desktop does not send raw activity or API keys to OpenAI, and all externally impactful actions require policy handling.
+The production desktop uses the real API workflow; fixture data is restricted to automated tests and the explicit development overlay preview. See [docs/full-desktop-workflow.md](docs/full-desktop-workflow.md) for setup, lifecycle, verification, and current limitations. The desktop does not send raw activity or API keys to OpenAI, and all actions pass through deterministic policy handling.

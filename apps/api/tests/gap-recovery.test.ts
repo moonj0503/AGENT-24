@@ -19,6 +19,7 @@ import {
 import type { OpenAIClient } from "../src/agents/openai/index.js";
 import { InMemoryWorkflowRepository } from "../src/repositories/in-memory-workflow-repository.js";
 import { GapRecoveryService } from "../src/services/gap-recovery-service.js";
+import { createActionArtifacts } from "../src/tools/index.js";
 
 const occurredAt = "2026-08-01T09:30:00.000Z";
 const goal = GoalSchema.parse({
@@ -136,6 +137,7 @@ describe("GapRecoveryService", () => {
       actionPlan,
       actionResults: runtimeResult().actionResults,
       recoveryBrief,
+      artifacts: createActionArtifacts(gapSession.gapId, actionPlan, runtimeResult().actionResults),
     });
     expect(getGoal).toHaveBeenCalledWith(goal.goalId);
     expect(getCheckpoint).toHaveBeenCalledWith(checkpoint.checkpointId);

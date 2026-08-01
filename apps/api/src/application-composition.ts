@@ -17,12 +17,17 @@ import {
   createGapLifecycleService,
   type GapLifecycleService,
 } from "./services/gap-lifecycle-service.js";
+import {
+  createGapHistoryService,
+  type GapHistoryService,
+} from "./services/gap-history-service.js";
 
 export interface ApplicationDependencies {
   readonly workflowService: WorkflowService;
   readonly agentBundle: AgentRuntimeBundle;
   readonly gapRecoveryService: GapRecoveryService;
   readonly gapLifecycleService: GapLifecycleService;
+  readonly gapHistoryService: GapHistoryService;
   readonly eventBus: InMemoryAgentEventBus;
 }
 
@@ -56,5 +61,6 @@ export function createApplicationDependencies(
       eventBus,
     ),
     gapLifecycleService: createGapLifecycleService(options.workflowRepository, eventBus, options.clock),
+    gapHistoryService: createGapHistoryService(options.workflowRepository),
   };
 }

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import type { GoalCandidate, GoalInferenceResult } from "@continuity/contracts";
+import type { PendingGoalConfirmation } from "../../features/goals/pending-confirmation-store";
 import { dismissOverlayWithAnimation } from "../overlay-store";
 
-export function GoalConfirmationOverlay({ inference, onSelect, onOpenDetails }: { inference: GoalInferenceResult; onSelect: (goal: GoalCandidate) => void; onOpenDetails: () => void }) {
+export function GoalConfirmationOverlay({ inference, pending: _pending, onSelect, onOpenDetails: _onOpenDetails, onLater, onIgnore: _onIgnore, onKeepCurrent: _onKeepCurrent }: { inference: GoalInferenceResult; pending?: PendingGoalConfirmation; onSelect: (goal: GoalCandidate) => void | Promise<void>; onOpenDetails: () => void; onLater?: () => void; onIgnore?: () => void; onKeepCurrent?: () => void }) {
   const [manualMode, setManualMode] = useState(false);
   const [title, setTitle] = useState("");
   if (manualMode) return <section className="overlay-card" aria-labelledby="overlay-manual-goal-title">
@@ -26,6 +27,6 @@ export function GoalConfirmationOverlay({ inference, onSelect, onOpenDetails }: 
       <span><strong>{candidate.title}</strong><small>{candidate.description}</small><small>Evidence: {candidate.evidence[0]?.description ?? "No evidence summary available."}</small></span>
       <b>{Math.round(candidate.confidence * 100)}%</b>
     </button>)}</div>
-    <div className="overlay-actions"><button className="button primary" onClick={() => setManualMode(true)}>Enter a different goal</button><button className="button secondary" onClick={dismissOverlayWithAnimation}>Cancel</button></div>
+    <div className="overlay-actions"><button className="button primary" onClick={() => setManualMode(true)}>Enter a different goal</button><button className="button secondary" onClick={onLater ?? dismissOverlayWithAnimation}>Cancel</button></div>
   </section>;
 }

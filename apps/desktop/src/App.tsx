@@ -1,7 +1,10 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import type { GoalCandidate, GoalInferenceResult, RecoveryBrief } from "@continuity/contracts";
 import { fetchGoalInference, selectGoal } from "./features/goals/api";
-import { createApprovalAction, createGapStartAction } from "./overlay/actions";
+import { getDesktopObservationWorkflow } from "./features/observation/desktop-session";
+import { getDesktopWorkflowController } from "./features/workflow/controller";
+import { getDesktopWorkflowState, useDesktopWorkflowState } from "./features/workflow/store";
+import { GOAL_CONFIRMATION_REQUESTED_EVENT, OBSERVATION_WORKFLOW_ERROR_EVENT, type GoalConfirmationRequested } from "./features/observation/types";
 import { fetchPermissionRules, type PermissionRule } from "./features/permissions/api";
 import { fetchRecoveryBrief } from "./features/recovery/api";
 import { type GapData } from "./features/gap/api";
@@ -24,7 +27,7 @@ export function App() {
   const [gapModeEnabled, setGapModeEnabled] = useState(() => window.localStorage.getItem("continuity:gap-mode") === "on");
   const [error, setError] = useState<string>();
   const overlay = useOverlaySnapshot();
-  const startGapOnce = useMemo(() => createGapStartAction(), []);
+  const workflow = useDesktopWorkflowState();
 
   useEffect(() => {
     void loadInference();
@@ -33,13 +36,20 @@ export function App() {
     const syncGoal = (event: StorageEvent) => { if (event.key === "continuity:selected-goal") setGoal(event.newValue ? JSON.parse(event.newValue) as GoalCandidate : undefined); };
     window.addEventListener("continuity:open-main-screen", openScreen);
     window.addEventListener("storage", syncGoal);
+    const workflowError = (event: Event) => setError((event as CustomEvent<string>).detail);
+    const goalRequested = (event: Event) => {
+      const request = (event as CustomEvent<GoalConfirmationRequested>).detail;
+      if (request) { setInference(request.inference); setGoal(request.candidate); }
+    };
+    window.addEventListener(OBSERVATION_WORKFLOW_ERROR_EVENT, workflowError);
+    window.addEventListener(GOAL_CONFIRMATION_REQUESTED_EVENT, goalRequested);
     let active = true;
     let unsubscribeNative: () => void = () => undefined;
     void listenForTauriEvent(TAURI_EVENTS.MAIN_NAVIGATE, (next) => { if (active) setScreen(next); }).then((unsubscribe) => {
       if (active) unsubscribeNative = unsubscribe;
       else unsubscribe();
     });
-    return () => { active = false; unsubscribeNative(); window.removeEventListener("continuity:open-main-screen", openScreen); window.removeEventListener("storage", syncGoal); };
+    return () => { active = false; unsubscribeNative(); window.removeEventListener("continuity:open-main-screen", openScreen); window.removeEventListener("storage", syncGoal); window.removeEventListener(OBSERVATION_WORKFLOW_ERROR_EVENT, workflowError); window.removeEventListener(GOAL_CONFIRMATION_REQUESTED_EVENT, goalRequested); };
   }, []);
 
   useEffect(() => {
@@ -90,16 +100,25 @@ export function App() {
   async function confirmGapStart() {
     setBusy(true); setError(undefined);
     try {
-      const next = await startGapOnce();
-      setGap(next); setScreen("gap");
-      return next;
+      const observation = getDesktopObservationWorkflow();
+      if (!observation) throw new Error("Goal identification is not ready.");
+      await observation.beginGapMode();
+      const latest = observation.session.getSnapshot().latestInference;
+      const controller = getDesktopWorkflowController();
+      if (!controller) throw new Error("Desktop workflow is not initialized.");
+      await controller.startGap(latest);
+      setGap(toGapData(getDesktopWorkflowState())); setScreen("gap");
+      return getDesktopWorkflowState().gapSession;
     } catch (cause) { setError(messageOf(cause, "Unable to start Gap Mode.")); throw cause; } finally { setBusy(false); }
   }
 
   async function finishGap() {
     setBusy(true); setError(undefined);
     try {
-      const nextBrief = await fetchRecoveryBrief();
+      const controller = getDesktopWorkflowController();
+      if (!controller) throw new Error("Desktop workflow is not initialized.");
+      const nextBrief = await controller.endGap();
+      await getDesktopObservationWorkflow()?.endGapMode();
       setBrief(nextBrief); setScreen("recovery");
       if (isNativeOverlayAvailable()) {
         try {
@@ -111,9 +130,11 @@ export function App() {
     } catch (cause) { setError(messageOf(cause, "Unable to prepare recovery.")); } finally { setBusy(false); }
   }
 
-  async function decideAction(actionId: string, status: "COMPLETED" | "REJECTED") {
-    if (!gap) return;
-    setGap(await createApprovalAction(gap, actionId, status));
+  async function decideAction(actionId: string, decision: "APPROVE" | "REJECT") {
+    const controller = getDesktopWorkflowController();
+    if (!controller) return;
+    await controller.decideAction(actionId, decision);
+    setGap(toGapData(getDesktopWorkflowState()));
   }
 
   function requestApproval(actionId: string) {
@@ -141,13 +162,18 @@ export function App() {
       {screen === "history" && <HistoryView />}
       {screen === "permissions" && <PermissionView rules={rules} />}
     </main>
-    {!isNativeOverlayAvailable() && overlay.state === "GAP_START_CONFIRMATION" && <div className="main-overlay-backdrop"><GapStartOverlay goal={overlay.selectedGoal ?? goal} gap={overlay.gap} onConfirm={confirmGapStart} onOpenDetails={() => { dismissOverlayWithAnimation(); setScreen("gap"); }} /></div>}
+    {!isNativeOverlayAvailable() && overlay.state === "GAP_START_CONFIRMATION" && <div className="main-overlay-backdrop"><GapStartOverlay goal={overlay.selectedGoal ?? goal} gap={overlay.gap} onConfirm={async () => { await confirmGapStart(); }} onOpenDetails={() => { dismissOverlayWithAnimation(); setScreen("gap"); }} /></div>}
     {!isNativeOverlayAvailable() && overlay.state === "APPROVAL_REQUIRED" && overlay.gap && overlay.actionId && <div className="main-overlay-backdrop"><ApprovalOverlay gap={overlay.gap} actionId={overlay.actionId} onDecision={async (id, status) => { await decideAction(id, status); dismissOverlayWithAnimation(); }} onOpenDetails={() => dismissOverlayWithAnimation()} /></div>}
-    {!isNativeOverlayAvailable() && overlay.state === "GOAL_CONFIRMATION" && inference && <div className="main-overlay-backdrop"><OverlayRoot inference={inference} handlers={{ onGoalSelected: (next) => { window.localStorage.setItem("continuity:selected-goal", JSON.stringify(next)); setGoal(next); dismissOverlayWithAnimation(); setScreen("dashboard"); }, onConfirmGapStart: confirmGapStart, onApproval: decideAction, onOpenMain: (next) => { dismissOverlayWithAnimation(); setScreen(next); } }} /></div>}
+    {!isNativeOverlayAvailable() && overlay.state === "GOAL_CONFIRMATION" && inference && <div className="main-overlay-backdrop"><OverlayRoot inference={inference} handlers={{ onGoalSelected: async (next) => { window.localStorage.setItem("continuity:selected-goal", JSON.stringify(next)); setGoal(next); dismissOverlayWithAnimation(); setScreen("dashboard"); }, onGoalLater: async () => { dismissOverlayWithAnimation(); }, onGoalIgnore: async () => { dismissOverlayWithAnimation(); }, onKeepCurrentGoal: async () => { dismissOverlayWithAnimation(); }, onConfirmGapStart: async () => { await confirmGapStart(); }, onApproval: decideAction, onOpenMain: (next) => { dismissOverlayWithAnimation(); setScreen(next); } }} /></div>}
   </div>;
 }
 
 function messageOf(cause: unknown, fallback: string) { return cause instanceof Error ? cause.message : fallback; }
+function toGapData(state: ReturnType<typeof getDesktopWorkflowState>): GapData | undefined {
+  return state.gapSession && state.actionPlan
+    ? { session: state.gapSession, plan: state.actionPlan, actionResults: [...state.actionResults] }
+    : undefined;
+}
 function screenTitle(screen: Screen) { return screen === "dashboard" ? "Good morning, Won" : screen === "goal" ? "Confirm your goal" : screen === "gap" ? "Gap Mode" : screen === "recovery" ? "Welcome back" : screen === "history" ? "History" : "Permissions"; }
 function AnimatedTitle({ screen }: { screen: Screen }) { const title = screenTitle(screen); const shouldAnimate = screen === "dashboard" || screen === "recovery"; return <>{Array.from(title).map((character, index) => <span className={shouldAnimate ? "title-char" : undefined} style={shouldAnimate ? { animationDelay: `${index * 38}ms` } : undefined} key={`${screen}-${index}`}>{character === " " ? "\u00a0" : character}</span>)}</>; }
 function NavItem({ active, onClick, icon, children }: { active: boolean; onClick: () => void; icon: string; children: string }) { return <button className={`nav-item ${active ? "active" : ""}`} onClick={onClick}><span className="nav-icon" aria-hidden="true">{icon}</span><span className="nav-label">{children}</span></button>; }
