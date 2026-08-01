@@ -6,6 +6,8 @@ The production desktop composes the existing components in this order:
 
 The initial desktop action creates only a local pending Gap intent. Observation for Goal identification starts at that point, clears stale queued inference for the intent, and continues until the Gap ends. No backend GapSession and no continuity action exist before explicit Goal confirmation. Cancelling confirmation stops the pending observation. This preserves the existing backend lifecycle and contracts while making Gap Mode the user-facing entry point.
 
+Goal identification runs once per minute and still requires two stable matching inference results before prompting the user. Failed inference attempts remain queued for retry and surface a temporary availability warning in the desktop.
+
 The desktop workflow controller is the authoritative owner of backend-returned IDs and lifecycle objects. The observation session remains responsible for inference scheduling and persistence. Direct HTTP responses are authoritative for user-triggered mutations; broad SSE synchronization is deferred because the current lifecycle is synchronous and does not require it.
 
 ## Environment
