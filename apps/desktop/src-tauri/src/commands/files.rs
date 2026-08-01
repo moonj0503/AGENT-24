@@ -137,7 +137,8 @@ fn validate_file_name(value: &str) -> Result<&str, String> {
 }
 
 fn canonical_text_path(value: &str) -> Result<PathBuf, String> {
-    let canonical = fs::canonicalize(value).map_err(|_| "select an existing saved file".to_owned())?;
+    let normalized = value.trim().trim_matches('"');
+    let canonical = fs::canonicalize(normalized).map_err(|_| "select an existing saved file".to_owned())?;
     if !canonical.is_file() { return Err("select an existing saved file".to_owned()); }
     let extension = canonical.extension().and_then(|value| value.to_str()).unwrap_or_default().to_ascii_lowercase();
     if !matches!(extension.as_str(), "txt" | "md") { return Err("only .txt and .md files can be approved".to_owned()); }
@@ -188,5 +189,12 @@ mod tests {
         let approved = state.authorize(file.to_str().unwrap(), FileApprovalScope::Gap).unwrap();
         fs::remove_file(&file).unwrap(); fs::write(&file, "replacement").unwrap();
         assert!(state.context(&approved.authorization_id).is_err()); let _ = fs::remove_dir_all(root);
+    }
+    #[test]
+    fn accepts_windows_copy_as_path_quotes() {
+        let root = std::env::temp_dir().join(format!("continuity-file-tool-{}", uuid::Uuid::new_v4())); fs::create_dir_all(&root).unwrap();
+        let file = root.join("notes.txt"); fs::write(&file, "text").unwrap();
+        assert_eq!(canonical_text_path(&format!("  \"{}\"  ", file.display())).unwrap(), fs::canonicalize(&file).unwrap());
+        let _ = fs::remove_dir_all(root);
     }
 }

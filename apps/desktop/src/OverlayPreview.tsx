@@ -50,6 +50,7 @@ export function OverlayPreview() {
       onGoalSelected: (goal: GoalCandidate) => setFeedback(`Selected goal: ${goal.title}`),
       onConfirmGapStart: async () => { setFeedback("Gap confirmation clicked — no gap API request was sent."); },
       onApproval: async (_actionId, decision) => { setFeedback(`Approval ${decision === "APPROVE" ? "accepted" : "rejected"} — no approval request was sent.`); },
+      onFilePermission: async (decision) => { setFeedback(`File permission: ${decision}.`); },
       onOpenMain: (screen) => setFeedback(`Detail request for Main Window screen: ${screen}`),
     }} /></div> : <div className="preview-loading">Loading mock overlay data…</div>}</section>
     <p className="preview-note">Native always-on-top, frameless, and desktop positioning behavior cannot be verified until Member 1&apos;s Tauri integration is complete.</p>

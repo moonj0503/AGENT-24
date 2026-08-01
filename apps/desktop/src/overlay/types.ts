@@ -4,6 +4,7 @@ import type { RecoveryBrief } from "@continuity/contracts";
 
 export const OVERLAY_STATES = [
   "GOAL_CONFIRMATION",
+  "FILE_EDIT_PERMISSION",
   "GAP_START_CONFIRMATION",
   "APPROVAL_REQUIRED",
   "RECOVERY_READY",
@@ -21,12 +22,14 @@ export type OverlaySnapshot = {
   gap?: GapData;
   actionId?: string;
   brief?: RecoveryBrief;
+  goalTitle?: string;
 };
 
 export const OVERLAY_PRIORITY: readonly OverlayState[] = [
   "APPROVAL_REQUIRED",
   "RECOVERY_READY",
   "GAP_START_CONFIRMATION",
+  "FILE_EDIT_PERMISSION",
   "GOAL_CONFIRMATION",
 ];
 
