@@ -17,6 +17,7 @@ it("converts Fastify validation errors to ApiError responses", async () => {
   const response = await app.inject({
     method: "POST",
     url: "/api/v1/test/validation",
+    headers: { "idempotency-key": "error-handler-validation" },
     payload: {},
   });
 
