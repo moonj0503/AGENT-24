@@ -88,6 +88,7 @@ export const ActionApprovalRequestSchema = z
   .object({
     decision: z.enum(["APPROVE", "REJECT"]),
     reason: z.string().min(1).optional(),
+    executionResult: ActionResultSchema.optional(),
   })
   .superRefine((value, context) => {
     if (value.decision === "REJECT" && !value.reason) {
@@ -97,6 +98,7 @@ export const ActionApprovalRequestSchema = z
         message: "A rejection reason is required.",
       });
     }
+    if (value.decision === "REJECT" && value.executionResult) context.addIssue({ code: "custom", path: ["executionResult"], message: "Rejected actions cannot include an execution result." });
   });
 
 /** POST /gaps/:gapId/end (path contract) */
@@ -167,6 +169,7 @@ export const RunGapRecoveryParamsSchema = z.object({
 export const RunGapRecoveryRequestSchema = z.object({
   goalId: IdentifierSchema,
   checkpointId: IdentifierSchema,
+  approvedTextFile: z.object({ authorizationId: IdentifierSchema, fileName: z.string().min(1), content: z.string().max(1_048_576) }).optional(),
 });
 
 /** Successful response for POST /gaps/:gapId/run. */

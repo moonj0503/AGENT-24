@@ -7,6 +7,6 @@ export async function fetchPermissionRules(): Promise<PermissionRule[]> {
     { label: "Capture local screenshots", decision: "AUTO", detail: "Every 20 seconds during Gap observation, with deduplication and retention limits" },
     { label: "Create or update exported text files", decision: "AUTO", detail: "Restricted to the Continuity export directory and .txt/.md formats" },
     { label: "Send email or messages", decision: "NEVER", detail: "The agent only prepares drafts" },
-    { label: "Edit original documents", decision: "NEVER", detail: "Original files remain unchanged" },
+    { label: "Edit approved text files", decision: "ASK", detail: "Only exact .txt/.md files you approve; every edit creates a backup" },
   ];
 }

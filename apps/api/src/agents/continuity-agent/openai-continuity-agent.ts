@@ -1,4 +1,4 @@
-import { ActionPlanSchema, type ActionPlan } from "@continuity/contracts";
+import { ActionPlanSchema, OpenAIActionPlanSchema, type ActionPlan } from "@continuity/contracts";
 import { zodTextFormat } from "openai/helpers/zod";
 import {
   createOpenAIClient,
@@ -58,7 +58,7 @@ export class OpenAIResponsesContinuityPlanningModel implements ContinuityPlannin
         input: request.input,
         store: false,
         text: {
-          format: zodTextFormat(ActionPlanSchema, "continuity_action_plan"),
+          format: zodTextFormat(OpenAIActionPlanSchema, "continuity_action_plan"),
         },
       });
       return response.output_parsed;
@@ -84,6 +84,17 @@ function validatePlanSemantics(plan: ActionPlan, input: ContinuityContext): void
       );
     }
     actionIds.add(action.actionId);
+
+    if (action.type === "EDIT_APPROVED_TEXT_FILE") {
+      const approved = input.approvedTextFile;
+      if (!approved || !action.textEdit || action.textEdit.authorizationId !== approved.authorizationId) {
+        throw new ContinuityAgentValidationError("OpenAI text edits must preserve the supplied file authorizationId.");
+      }
+      if (approved.content.split(action.textEdit.find).length - 1 !== 1) {
+        throw new ContinuityAgentValidationError("OpenAI text edits must target text that occurs exactly once.");
+      }
+    }
+    if (action.type !== "EDIT_APPROVED_TEXT_FILE" && action.textEdit) throw new ContinuityAgentValidationError("Only approved text-edit actions may contain textEdit data.");
 
     if (action.status !== "PLANNED" && action.status !== "POLICY_CHECKING") {
       throw new ContinuityAgentValidationError(

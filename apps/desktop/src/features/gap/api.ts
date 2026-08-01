@@ -39,13 +39,13 @@ export async function createGapSession(workSessionId: string, goalId: string, ch
   return GapSessionSchema.parse(await apiRequest("/gaps", { method: "POST", body: JSON.stringify(request) }));
 }
 
-export async function runGap(session: GapSession): Promise<RunGapRecoveryResponse> {
-  const request = RunGapRecoveryRequestSchema.parse({ goalId: session.goalId, checkpointId: session.checkpointId });
+export async function runGap(session: GapSession, approvedTextFile?: { authorizationId: string; fileName: string; content: string }): Promise<RunGapRecoveryResponse> {
+  const request = RunGapRecoveryRequestSchema.parse({ goalId: session.goalId, checkpointId: session.checkpointId, approvedTextFile });
   return RunGapRecoveryResponseSchema.parse(await apiRequest(`/gaps/${encodeURIComponent(session.gapId)}/run`, { method: "POST", body: JSON.stringify(request) }));
 }
 
-export async function decideGapAction(gapId: string, actionId: string, decision: "APPROVE" | "REJECT", reason?: string): Promise<PlannedAction> {
-  const request = ActionApprovalRequestSchema.parse({ decision, ...(reason ? { reason } : {}) });
+export async function decideGapAction(gapId: string, actionId: string, decision: "APPROVE" | "REJECT", reason?: string, executionResult?: ActionResult): Promise<PlannedAction> {
+  const request = ActionApprovalRequestSchema.parse({ decision, ...(reason ? { reason } : {}), executionResult });
   return PlannedActionSchema.parse(await apiRequest(`/gaps/${encodeURIComponent(gapId)}/actions/${encodeURIComponent(actionId)}/approval`, { method: "POST", body: JSON.stringify(request) }));
 }
 

@@ -19,6 +19,7 @@ function action(type: PlannedAction["type"]): PlannedAction {
     riskLevel: type === "SEND_EMAIL" ? "HIGH" : "LOW",
     reversible: type !== "SEND_EMAIL",
     status: "POLICY_CHECKING",
+    ...(type === "EDIT_APPROVED_TEXT_FILE" ? { textEdit: { authorizationId: "authorization-test", find: "before", replace: "after" } } : {}),
   });
 }
 
@@ -87,6 +88,7 @@ describe("DefaultToolRegistry", () => {
       "CREATE_MESSAGE_DRAFT",
       "ORGANIZE_REFERENCES",
       "GENERATE_RECOVERY_BRIEF",
+      "EDIT_APPROVED_TEXT_FILE",
       "SEND_EMAIL",
     ];
 

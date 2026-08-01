@@ -13,7 +13,7 @@ pub fn run() {
             let repository = storage::ActivityRepository::open(directory.join("continuity-activity.db"))?;
             app.manage(commands::activity::ObserverState::new(repository));
             app.manage(commands::screenshot::ScreenshotState::new(directory.join("screenshots")));
-            app.manage(commands::files::FileToolState::new(directory.join("exports")));
+            app.manage(commands::files::FileToolState::new(directory.join("exports"), directory.clone()));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -26,6 +26,11 @@ pub fn run() {
             commands::activity::set_user_blocked_applications,
             commands::screenshot::capture_observation_screenshot,
             commands::files::write_text_file,
+            commands::files::authorize_text_file,
+            commands::files::list_approved_text_files,
+            commands::files::revoke_text_file_authorization,
+            commands::files::read_approved_text_file,
+            commands::files::apply_approved_text_patch,
             commands::overlay::show_overlay,
             commands::overlay::hide_overlay,
             commands::overlay::position_overlay,

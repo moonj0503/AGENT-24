@@ -5,6 +5,7 @@ export interface ContinuityContext {
   readonly goal: Goal;
   readonly checkpoint: Checkpoint;
   readonly gapSession: GapSession;
+  readonly approvedTextFile?: { readonly authorizationId: string; readonly fileName: string; readonly content: string };
 }
 
 export interface ContinuityAgent {
