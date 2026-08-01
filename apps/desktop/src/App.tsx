@@ -42,9 +42,22 @@ export function App() {
     return () => { active = false; unsubscribeNative(); window.removeEventListener("continuity:open-main-screen", openScreen); window.removeEventListener("storage", syncGoal); };
   }, []);
 
-  async function loadInference() {
+  useEffect(() => {
+    if (!gapModeEnabled) return;
+    const interval = window.setInterval(() => { void loadInference(true); }, 8000);
+    return () => window.clearInterval(interval);
+  }, [gapModeEnabled]);
+
+  async function loadInference(openOverlay = false) {
     setBusy(true); setError(undefined);
-    try { setInference(await fetchGoalInference()); } catch (cause) { setError(messageOf(cause, "Unable to load goals.")); } finally { setBusy(false); }
+    try {
+      const nextInference = await fetchGoalInference();
+      setInference(nextInference);
+      if (openOverlay) {
+        if (isNativeOverlayAvailable()) void showOverlayForEvent(TAURI_EVENTS.GOAL_CONFIRMATION, { inference: nextInference });
+        else setGoalConfirmation(nextInference);
+      }
+    } catch (cause) { setError(messageOf(cause, "Unable to load goals.")); } finally { setBusy(false); }
   }
 
   function requestGoalConfirmation() {
@@ -62,7 +75,10 @@ export function App() {
     setGapModeEnabled((enabled) => {
       const next = !enabled;
       window.localStorage.setItem("continuity:gap-mode", next ? "on" : "off");
-      if (next) window.localStorage.setItem("continuity:gap-mode-cycle", String(Date.now()));
+      if (next) {
+        window.localStorage.setItem("continuity:gap-mode-cycle", String(Date.now()));
+        void loadInference(true);
+      }
       return next;
     });
   }

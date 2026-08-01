@@ -1,35 +1,19 @@
 import type { GoalCandidate, GoalInferenceResult } from "@continuity/contracts";
-import fixture from "../../mocks/goal-candidates.json";
+import type { ActivityEvent } from "@continuity/contracts";
+import { apiRequest } from "../../lib/api";
+import { invokeNative, isNativeOverlayAvailable } from "../../lib/tauri";
 
-const demoGoals: GoalInferenceResult = {
-  inferenceId: "inf-001",
-  requiresConfirmation: true,
-  inferenceSummary: "Recent Word and Chrome activity suggests report writing.",
-  candidates: [
-    {
-      candidateId: "goal-001",
-      title: "Write the final project report",
-      description: "Draft the QR factorization numerical stability section.",
-      confidence: 0.84,
-      evidence: [{ type: "RESOURCE", description: "Final Project Report.docx" }],
-      suggestedGoalPath: ["Final Project", "Report Writing", "QR Factorization"],
-    },
-    {
-      candidateId: "goal-002",
-      title: "Study QR factorization",
-      description: "Review numerical stability references.",
-      confidence: 0.12,
-      evidence: [{ type: "ACTIVITY_SEQUENCE", description: "Searched QR factorization stability in Chrome" }],
-      suggestedGoalPath: ["Study", "Linear Algebra"],
-    },
-  ],
-};
+const WORK_SESSION_KEY = "continuity:work-session-id";
 
 export async function fetchGoalInference(): Promise<GoalInferenceResult> {
-  if (!fixture.candidates?.length) {
-    throw new Error("The goal demo fixture is unavailable.");
-  }
-  return structuredClone(demoGoals);
+  if (!isNativeOverlayAvailable()) throw new Error("The native activity observer is unavailable.");
+  await invokeNative("get_current_activity");
+  const events = await invokeNative("get_recent_activity_events", { limit: 20 }) as ActivityEvent[] | undefined;
+  if (!events?.length) throw new Error("No recent activity is available for goal inference.");
+  const workSessionId = window.localStorage.getItem(WORK_SESSION_KEY) ?? crypto.randomUUID();
+  window.localStorage.setItem(WORK_SESSION_KEY, workSessionId);
+  const observation = await apiRequest<{ acceptedEventIds: string[] }>("/observations", { method: "POST", body: JSON.stringify({ workSessionId, events }) });
+  return apiRequest<GoalInferenceResult>("/goal-inferences", { method: "POST", body: JSON.stringify({ workSessionId, observationEventIds: observation.acceptedEventIds }) });
 }
 
 export function selectGoal(result: GoalInferenceResult, candidateId: string): GoalCandidate {

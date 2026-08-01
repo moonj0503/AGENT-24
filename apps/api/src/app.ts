@@ -21,6 +21,16 @@ export interface AppDependencies {
 
 export function buildApp(dependencies: AppDependencies = {}) {
   const app = Fastify({ logger: false });
+  app.addHook("onRequest", async (request, reply) => {
+    const origin = request.headers.origin;
+    if (origin) {
+      reply.header("access-control-allow-origin", origin);
+      reply.header("access-control-allow-methods", "GET,POST,OPTIONS");
+      reply.header("access-control-allow-headers", "content-type,idempotency-key");
+      reply.header("vary", "Origin");
+    }
+    if (request.method === "OPTIONS") return reply.status(204).send();
+  });
   const eventBus = dependencies.eventBus ?? new InMemoryAgentEventBus();
   registerErrorHandler(app);
   registerIdempotency(app, dependencies.idempotencyStore);
