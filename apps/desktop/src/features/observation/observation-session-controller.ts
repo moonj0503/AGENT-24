@@ -53,6 +53,7 @@ export class ObservationSessionController {
   private snoozed = false;
   private uploadRetryAt = 0;
   private inferenceRetryAt = 0;
+  private initialGapCyclePending = false;
   private readonly uploadBackoff = new ExponentialBackoff();
   private readonly inferenceBackoff = new ExponentialBackoff();
 
@@ -84,6 +85,10 @@ export class ObservationSessionController {
     this.status = "RUNNING";
     this.generation += 1;
     this.schedule();
+    if (this.initialGapCyclePending) {
+      this.initialGapCyclePending = false;
+      void this.runInitialGapCycle();
+    }
     this.dependencies.onStateChanged?.(true);
   }
 
@@ -124,6 +129,10 @@ export class ObservationSessionController {
     this.lastPopupAt = undefined;
     this.lastObservationSignature = undefined;
     this.snoozed = false;
+    this.uploadRetryAt = 0;
+    this.inferenceRetryAt = 0;
+    this.uploadBackoff.reset();
+    this.inferenceBackoff.reset();
   }
 
   snooze(): void {
@@ -147,6 +156,11 @@ export class ObservationSessionController {
     this.lastPopupAt = undefined;
     this.snoozed = false;
     this.lastObservationSignature = undefined;
+    this.uploadRetryAt = 0;
+    this.inferenceRetryAt = 0;
+    this.uploadBackoff.reset();
+    this.inferenceBackoff.reset();
+    this.initialGapCyclePending = true;
     void this.captureScreenshot();
     this.dependencies.onStateChanged?.(true);
   }
@@ -225,6 +239,12 @@ export class ObservationSessionController {
     } finally {
       this.capturingScreenshot = false;
     }
+  }
+
+  private async runInitialGapCycle(): Promise<void> {
+    await this.observeCycle();
+    await this.uploadCycle();
+    await this.inferenceCycle();
   }
 
   private async observeCycle(): Promise<void> {
