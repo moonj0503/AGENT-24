@@ -190,6 +190,48 @@ describe("GapRecoveryService", () => {
       message: "The recovery context could not be loaded.",
     });
   });
+
+  it("retries continuity without file access when an approved-file proposal is invalid", async () => {
+    const run = vi.fn()
+      .mockRejectedValueOnce(new RuntimeExecutionError("CONTINUITY", "invalid approved-file edit"))
+      .mockResolvedValueOnce(runtimeResult());
+    const service = new GapRecoveryService(repository(), { run }, { now: () => occurredAt });
+    const approvedTextFile = {
+      authorizationId: "authorization-001",
+      fileName: "letter.txt",
+      content: "Dear Professor,",
+    };
+
+    await expect(service.run(params, { ...request, approvedTextFile })).resolves.toMatchObject({
+      actionPlan,
+      recoveryBrief,
+    });
+    expect(run).toHaveBeenNthCalledWith(1, {
+      goal,
+      checkpoint,
+      gapSession,
+      occurredAt,
+      approvedTextFile,
+    });
+    expect(run).toHaveBeenNthCalledWith(2, { goal, checkpoint, gapSession, occurredAt });
+  });
+
+  it("does not retry non-continuity failures with approved file access", async () => {
+    const run = vi.fn(async () => {
+      throw new RuntimeExecutionError("TOOL", "file changed after approval");
+    });
+    const service = new GapRecoveryService(repository(), { run }, { now: () => occurredAt });
+
+    await expect(service.run(params, {
+      ...request,
+      approvedTextFile: {
+        authorizationId: "authorization-001",
+        fileName: "letter.txt",
+        content: "Dear Professor,",
+      },
+    })).rejects.toMatchObject({ code: "AGENT_FAILURE" });
+    expect(run).toHaveBeenCalledOnce();
+  });
 });
 
 function runtimeRequest(key: string, payload: object = request) {

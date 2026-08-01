@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import {
   RuntimeContextValidationError,
   RuntimeExecutionError,
+  type RuntimeInput,
   type RuntimeOrchestrator,
 } from "../agents/runtime/index.js";
 import type { AgentEventPublisher } from "../features/workflow/event-bus.js";
@@ -43,23 +44,34 @@ export class GapRecoveryService {
       throw new ApiHttpError("CONFLICT", "The recovery context identities do not match.");
     }
 
+    const runtimeInput: RuntimeInput = {
+      goal,
+      checkpoint,
+      gapSession,
+      occurredAt: this.clock.now(),
+      ...(request.approvedTextFile ? { approvedTextFile: request.approvedTextFile } : {}),
+    };
+
     let result;
     try {
-      result = await this.runtime.run({
-        goal,
-        checkpoint,
-        gapSession,
-        occurredAt: this.clock.now(),
-        approvedTextFile: request.approvedTextFile,
-      });
+      result = await this.runtime.run(runtimeInput);
     } catch (cause) {
       if (cause instanceof RuntimeContextValidationError) {
         throw new ApiHttpError("CONFLICT", "The recovery context identities do not match.", { cause });
       }
-      if (cause instanceof RuntimeExecutionError) {
-        throw new ApiHttpError("AGENT_FAILURE", "The recovery runtime could not complete.", { cause });
+      if (
+        request.approvedTextFile
+        && cause instanceof RuntimeExecutionError
+        && cause.stage === "CONTINUITY"
+      ) {
+        try {
+          result = await this.runtime.run({ goal, checkpoint, gapSession, occurredAt: runtimeInput.occurredAt });
+        } catch (retryCause) {
+          throw this.mapRuntimeError(retryCause);
+        }
+      } else {
+        throw this.mapRuntimeError(cause);
       }
-      throw new ApiHttpError("AGENT_FAILURE", "The recovery runtime could not complete.", { cause });
     }
 
     const artifacts = createActionArtifacts(gapSession.gapId, result.actionPlan, result.actionResults);
@@ -85,6 +97,13 @@ export class GapRecoveryService {
       recoveryBrief: result.recoveryBrief,
       artifacts,
     };
+  }
+
+  private mapRuntimeError(cause: unknown): ApiHttpError {
+    if (cause instanceof RuntimeContextValidationError) {
+      return new ApiHttpError("CONFLICT", "The recovery context identities do not match.", { cause });
+    }
+    return new ApiHttpError("AGENT_FAILURE", "The recovery runtime could not complete.", { cause });
   }
 
   private async loadContext(params: RunGapRecoveryParams, request: RunGapRecoveryRequest) {
