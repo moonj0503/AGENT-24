@@ -14,7 +14,7 @@ function dependencies(): DesktopWorkflowControllerDependencies {
   return {
     createCheckpoint: vi.fn(async () => checkpoint),
     createGapSession: vi.fn(async () => session),
-    runGap: vi.fn(async () => ({ actionPlan: plan, actionResults: [], recoveryBrief: brief })),
+    runGap: vi.fn(async () => ({ actionPlan: plan, actionResults: [], recoveryBrief: brief, artifacts: [] })),
     decideGapAction: vi.fn(), fetchGapActions: vi.fn(),
     endGapSession: vi.fn(async () => completedSession),
     fetchRecoveryBrief: vi.fn(async () => brief),
@@ -39,6 +39,7 @@ describe("DesktopWorkflowController", () => {
     expect(getDesktopWorkflowState()).toEqual({
       workSessionId: "session-real-id",
       actionResults: [],
+      artifacts: [],
       phase: "IDENTIFYING_GOAL",
       pending: false,
     });
@@ -67,6 +68,6 @@ describe("DesktopWorkflowController", () => {
   it("explicitly clears lifecycle state while retaining the work session identity", () => {
     const controller = new DesktopWorkflowController("session-real-id", goal, dependencies());
     controller.clear();
-    expect(getDesktopWorkflowState()).toEqual({ workSessionId: "session-real-id", actionResults: [], phase: "OBSERVING", pending: false });
+    expect(getDesktopWorkflowState()).toEqual({ workSessionId: "session-real-id", actionResults: [], artifacts: [], phase: "OBSERVING", pending: false });
   });
 });

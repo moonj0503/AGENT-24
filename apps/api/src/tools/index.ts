@@ -6,3 +6,4 @@ export {
   defaultTools,
 } from "./registry.js";
 export type { AgentTool, ToolExecutionContext, ToolRegistry } from "./types.js";
+export { createActionArtifacts } from "./artifacts.js";

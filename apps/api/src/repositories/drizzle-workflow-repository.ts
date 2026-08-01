@@ -2,6 +2,7 @@ import { and, desc, eq, inArray } from "drizzle-orm";
 import {
   activityEvents,
   actionResults,
+  artifacts,
   actionPlans,
   checkpoints,
   gapActions,
@@ -14,6 +15,7 @@ import {
 import {
   ActionPlanSchema,
   ActionResultSchema,
+  ArtifactSchema,
   CheckpointSchema,
   GapSessionSchema,
   GoalInferenceResultSchema,
@@ -24,6 +26,7 @@ import {
   type ActivityEvent,
   type ActionPlan,
   type ActionResult,
+  type Artifact,
   type Checkpoint,
   type GapSession,
   type Goal,
@@ -220,6 +223,48 @@ export class DrizzleWorkflowRepository implements WorkflowRepository {
     });
   }
 
+  async saveArtifacts(items: readonly Artifact[]): Promise<void> {
+    await Promise.all(items.map((artifact) => this.db.insert(artifacts).values({
+      artifactId: artifact.artifactId,
+      gapId: artifact.gapId,
+      actionId: artifact.actionId,
+      type: artifact.type,
+      title: artifact.title,
+      content: artifact.content,
+      status: artifact.status,
+      createdAt: new Date(artifact.createdAt),
+      updatedAt: new Date(artifact.updatedAt),
+    }).onConflictDoUpdate({
+      target: artifacts.artifactId,
+      set: {
+        title: artifact.title,
+        content: artifact.content,
+        status: artifact.status,
+        updatedAt: new Date(artifact.updatedAt),
+      },
+    })));
+  }
+
+  async getArtifact(artifactId: string): Promise<Artifact | null> {
+    const [row] = await this.db.select().from(artifacts).where(eq(artifacts.artifactId, artifactId)).limit(1);
+    return row ? this.parseArtifact(row) : null;
+  }
+
+  async listArtifacts(gapId: string): Promise<readonly Artifact[]> {
+    const rows = await this.db.select().from(artifacts)
+      .where(eq(artifacts.gapId, gapId)).orderBy(artifacts.createdAt);
+    return rows.map((row) => this.parseArtifact(row));
+  }
+
+  async updateArtifact(artifact: Artifact): Promise<void> {
+    await this.db.update(artifacts).set({
+      title: artifact.title,
+      content: artifact.content,
+      status: artifact.status,
+      updatedAt: new Date(artifact.updatedAt),
+    }).where(eq(artifacts.artifactId, artifact.artifactId));
+  }
+
   async listGapActions(gapId: string): Promise<readonly StoredGapAction[]> {
     const [actions, results] = await Promise.all([
       this.db.select().from(gapActions).where(eq(gapActions.gapId, gapId)),
@@ -273,6 +318,20 @@ export class DrizzleWorkflowRepository implements WorkflowRepository {
       status: row.status,
       startedAt: row.startedAt.toISOString(),
       ...(row.endedAt ? { endedAt: row.endedAt.toISOString() } : {}),
+    });
+  }
+
+  private parseArtifact(row: typeof artifacts.$inferSelect): Artifact {
+    return ArtifactSchema.parse({
+      artifactId: row.artifactId,
+      gapId: row.gapId,
+      actionId: row.actionId,
+      type: row.type,
+      title: row.title,
+      content: row.content,
+      status: row.status,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
     });
   }
 }

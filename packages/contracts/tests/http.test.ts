@@ -90,6 +90,7 @@ describe("HTTP request contracts", () => {
   });
 
   it("validates the confirmed-gap runtime request and response", () => {
+    const artifact = { artifactId: "artifact-001", gapId: "gap-001", actionId: "act-001", type: "TODO", title: "Plan", content: "- [ ] Start", status: "ACTIVE", createdAt: "2026-08-01T09:30:00.000Z", updatedAt: "2026-08-01T09:30:00.000Z" };
     expect(RunGapRecoveryParamsSchema.safeParse({ gapId: "gap-001" }).success).toBe(true);
     expect(RunGapRecoveryRequestSchema.safeParse({
       goalId: "goal-001",
@@ -106,10 +107,12 @@ describe("HTTP request contracts", () => {
         occurredAt: "2026-08-01T09:30:00.000Z",
       })],
       recoveryBrief: RecoveryBriefSchema.parse(fixture("recovery-brief.json")),
+      artifacts: [artifact],
     }).success).toBe(true);
   });
 
   it("validates History query, path, list, detail, and action responses", () => {
+    const artifact = { artifactId: "artifact-001", gapId: "gap-001", actionId: "act-001", type: "TODO", title: "Plan", content: "- [ ] Start", status: "ACTIVE", createdAt: "2026-08-01T09:30:00.000Z", updatedAt: "2026-08-01T09:30:00.000Z" };
     const gap = {
       gapId: "gap-001",
       workSessionId: "ws-001",
@@ -132,6 +135,7 @@ describe("HTTP request contracts", () => {
     expect(GapHistoryListResponseSchema.safeParse({ items: [{ gapSession: gap }] }).success).toBe(true);
     expect(GapActionsResponseSchema.safeParse({
       actions: [{ action, decision: "APPROVE", result }],
+      artifacts: [artifact],
     }).success).toBe(true);
     expect(GapHistoryDetailSchema.safeParse({
       gapSession: gap,
@@ -155,6 +159,7 @@ describe("HTTP request contracts", () => {
         createdAt: "2026-08-01T09:00:00.000Z",
       },
       actions: [{ action, decision: "APPROVE", result }],
+      artifacts: [artifact],
     }).success).toBe(true);
   });
 });
