@@ -1,6 +1,7 @@
 import type { MainScreen } from "../overlay/types";
 import type { GapData } from "../features/gap/api";
-import type { GoalCandidate, GoalInferenceResult, RecoveryBrief } from "@continuity/contracts";
+import type { Goal, GoalCandidate, GoalInferenceResult, RecoveryBrief } from "@continuity/contracts";
+import type { PendingGoalConfirmation } from "../features/goals/pending-confirmation-store";
 
 export const TAURI_EVENTS = {
   GOAL_CONFIRMATION: "overlay:goal-confirmation",
@@ -10,6 +11,8 @@ export const TAURI_EVENTS = {
   DISMISS: "overlay:dismiss",
   MAIN_NAVIGATE: "main:navigate",
   WINDOW_FOCUS: "window:focus",
+  GOAL_CONFIRMED: "goal:confirmed",
+  GOAL_CONFIRMATION_RESOLVED: "goal:confirmation-resolved",
 } as const;
 
 export const MAIN_SCREEN_IDS = [
@@ -23,13 +26,21 @@ export const MAIN_SCREEN_IDS = [
 
 export type TauriEventName = typeof TAURI_EVENTS[keyof typeof TAURI_EVENTS];
 export type TauriEventPayloads = {
-  [TAURI_EVENTS.GOAL_CONFIRMATION]: { inference: GoalInferenceResult };
+  [TAURI_EVENTS.GOAL_CONFIRMATION]: {
+    inference: GoalInferenceResult;
+    pending?: PendingGoalConfirmation;
+  };
   [TAURI_EVENTS.GAP_START_CONFIRMATION]: { selectedGoal?: GoalCandidate };
   [TAURI_EVENTS.APPROVAL_REQUIRED]: { gap: GapData; actionId: string };
   [TAURI_EVENTS.RECOVERY_READY]: { brief: RecoveryBrief & { gapDurationSeconds?: number } };
   [TAURI_EVENTS.DISMISS]: undefined;
   [TAURI_EVENTS.MAIN_NAVIGATE]: MainScreen;
   [TAURI_EVENTS.WINDOW_FOCUS]: undefined;
+  [TAURI_EVENTS.GOAL_CONFIRMED]: { goal: Goal };
+  [TAURI_EVENTS.GOAL_CONFIRMATION_RESOLVED]: {
+    action: "LATER" | "IGNORE" | "KEEP_CURRENT";
+    candidateSignature: string;
+  };
 };
 
 type TauriBridge = {
@@ -143,5 +154,11 @@ function parseTauriEventPayload<N extends TauriEventName>(name: N, payload: unkn
   if (name === TAURI_EVENTS.GAP_START_CONFIRMATION && (payload.selectedGoal === undefined || isRecord(payload.selectedGoal))) return payload as TauriEventPayloads[N];
   if (name === TAURI_EVENTS.APPROVAL_REQUIRED && isRecord(payload.gap) && typeof payload.actionId === "string") return payload as TauriEventPayloads[N];
   if (name === TAURI_EVENTS.RECOVERY_READY && isRecord(payload.brief)) return payload as TauriEventPayloads[N];
+  if (name === TAURI_EVENTS.GOAL_CONFIRMED && isRecord(payload.goal)) return payload as TauriEventPayloads[N];
+  if (
+    name === TAURI_EVENTS.GOAL_CONFIRMATION_RESOLVED
+    && ["LATER", "IGNORE", "KEEP_CURRENT"].includes(String(payload.action))
+    && typeof payload.candidateSignature === "string"
+  ) return payload as TauriEventPayloads[N];
   return undefined;
 }
