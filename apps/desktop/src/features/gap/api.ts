@@ -1,36 +1,59 @@
-import type { ActionPlan, GapSession } from "@continuity/contracts";
+import {
+  ActionApprovalRequestSchema,
+  CheckpointSchema,
+  CreateCheckpointRequestSchema,
+  EndGapRequestSchema,
+  EndGapResponseSchema,
+  GapActionsResponseSchema,
+  GapSessionSchema,
+  PlannedActionSchema,
+  RunGapRecoveryRequestSchema,
+  RunGapRecoveryResponseSchema,
+  StartGapRequestSchema,
+  type ActionPlan,
+  type ActionResult,
+  type Checkpoint,
+  type GapSession,
+  type Goal,
+  type GoalInferenceResult,
+  type PlannedAction,
+  type RunGapRecoveryResponse,
+} from "@continuity/contracts";
+import { apiRequest } from "../../lib/api";
 
-export type GapData = { session: GapSession; plan: ActionPlan };
+export type GapData = { session: GapSession; plan: ActionPlan; actionResults: readonly ActionResult[] };
 
-const gapData: GapData = {
-  session: {
-    gapId: "gap-001", workSessionId: "ws-001", goalId: "goal-001", checkpointId: "cp-001",
-    status: "EXECUTING", startedAt: "2026-08-01T09:10:00.000Z",
-  },
-  plan: {
-    planId: "plan-001", gapId: "gap-001",
-    continuityObjective: "Preserve the report-writing workflow and minimize recovery cost.",
-    actions: [
-      { actionId: "act-001", type: "CREATE_TODO_DRAFT", title: "Draft next-paragraph outline", reason: "Preserve the next writing step.", riskLevel: "LOW", reversible: true, status: "COMPLETED" },
-      { actionId: "act-002", type: "CREATE_MESSAGE_DRAFT", title: "Prepare team update", reason: "Keep teammates informed without sending a message.", riskLevel: "MEDIUM", reversible: true, status: "WAITING_APPROVAL" },
-      { actionId: "act-003", type: "ORGANIZE_REFERENCES", title: "Organize QR references", reason: "Make relevant references easier to recover.", riskLevel: "LOW", reversible: true, status: "PLANNED" },
-    ],
-  },
-};
-
-/** Read-only fixture access for the development preview; it never starts a gap. */
-export function getGapPreviewData(): GapData {
-  return structuredClone(gapData);
+export async function createCheckpoint(goal: Goal, inference?: GoalInferenceResult): Promise<Checkpoint> {
+  const request = CreateCheckpointRequestSchema.parse({
+    goalId: goal.goalId,
+    currentState: inference?.inferenceSummary ?? `Continuity is preserving the confirmed Goal: ${goal.title}.`,
+    completedSincePrevious: [], openQuestions: [],
+    likelyNextActions: [{ title: `Resume ${goal.title}`, estimatedMinutes: 10 }],
+    relatedResources: [], confidence: goal.confidence,
+  });
+  return CheckpointSchema.parse(await apiRequest("/checkpoints", { method: "POST", body: JSON.stringify(request) }));
 }
 
-export async function startGap(): Promise<GapData> {
-  return structuredClone(gapData);
+export async function createGapSession(workSessionId: string, goalId: string, checkpointId: string): Promise<GapSession> {
+  const request = StartGapRequestSchema.parse({ workSessionId, goalId, checkpointId });
+  return GapSessionSchema.parse(await apiRequest("/gaps", { method: "POST", body: JSON.stringify(request) }));
 }
 
-export async function updateAction(actionId: string, status: "COMPLETED" | "REJECTED"): Promise<GapData> {
-  const next = structuredClone(gapData);
-  const action = next.plan.actions.find((item) => item.actionId === actionId);
-  if (!action) throw new Error("Action not found.");
-  action.status = status;
-  return next;
+export async function runGap(session: GapSession): Promise<RunGapRecoveryResponse> {
+  const request = RunGapRecoveryRequestSchema.parse({ goalId: session.goalId, checkpointId: session.checkpointId });
+  return RunGapRecoveryResponseSchema.parse(await apiRequest(`/gaps/${encodeURIComponent(session.gapId)}/run`, { method: "POST", body: JSON.stringify(request) }));
+}
+
+export async function decideGapAction(gapId: string, actionId: string, decision: "APPROVE" | "REJECT", reason?: string): Promise<PlannedAction> {
+  const request = ActionApprovalRequestSchema.parse({ decision, ...(reason ? { reason } : {}) });
+  return PlannedActionSchema.parse(await apiRequest(`/gaps/${encodeURIComponent(gapId)}/actions/${encodeURIComponent(actionId)}/approval`, { method: "POST", body: JSON.stringify(request) }));
+}
+
+export async function fetchGapActions(gapId: string) {
+  return GapActionsResponseSchema.parse(await apiRequest(`/gaps/${encodeURIComponent(gapId)}/actions`));
+}
+
+export async function endGapSession(gapId: string): Promise<GapSession> {
+  const request = EndGapRequestSchema.parse({ reason: "The user returned to the workflow." });
+  return EndGapResponseSchema.parse(await apiRequest(`/gaps/${encodeURIComponent(gapId)}/end`, { method: "POST", body: JSON.stringify(request) }));
 }

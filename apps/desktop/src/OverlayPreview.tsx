@@ -1,9 +1,8 @@
 /** Development-only visual preview. This file must not become production overlay behavior. */
 import { useEffect, useState } from "react";
 import type { GoalCandidate, GoalInferenceResult, RecoveryBrief } from "@continuity/contracts";
-import { fetchGoalInference } from "./features/goals/api";
-import { getGapPreviewData, type GapData } from "./features/gap/api";
-import { fetchRecoveryBrief } from "./features/recovery/api";
+import type { GapData } from "./features/gap/api";
+import { previewGap, previewInference, previewRecovery } from "./features/preview/data";
 import { OverlayRoot } from "./overlay/OverlayRoot";
 import { dismissOverlay, openOverlay } from "./overlay/overlay-store";
 import type { OverlayState } from "./overlay/types";
@@ -26,12 +25,10 @@ export function OverlayPreview() {
 
   useEffect(() => {
     let active = true;
-    void Promise.all([fetchGoalInference(), fetchRecoveryBrief()]).then(([nextInference, nextBrief]) => {
-      if (!active) return;
-      const nextGap = getGapPreviewData();
-      setInference(nextInference); setBrief(nextBrief); setGap(nextGap);
-      openPreviewState("GOAL_CONFIRMATION", nextInference, nextGap, nextBrief);
-    });
+    if (active) {
+      setInference(previewInference); setBrief(previewRecovery); setGap(previewGap);
+      openPreviewState("GOAL_CONFIRMATION", previewInference, previewGap, previewRecovery);
+    }
     return () => { active = false; dismissOverlay(); };
   }, []);
 
@@ -40,7 +37,7 @@ export function OverlayPreview() {
     if (nextState === "HIDDEN") { dismissOverlay(); return; }
     if (nextState === "GOAL_CONFIRMATION" && nextInference) openOverlay({ state: nextState, inference: nextInference });
     if (nextState === "GAP_START_CONFIRMATION") openOverlay({ state: nextState, selectedGoal: nextInference?.candidates[0], gap: nextGap });
-    if (nextState === "APPROVAL_REQUIRED" && nextGap) openOverlay({ state: nextState, gap: nextGap, actionId: "act-002" });
+    if (nextState === "APPROVAL_REQUIRED" && nextGap) openOverlay({ state: nextState, gap: nextGap, actionId: "preview-action" });
     if (nextState === "RECOVERY_READY" && nextBrief) openOverlay({ state: nextState, brief: nextBrief });
   }
 
@@ -51,8 +48,8 @@ export function OverlayPreview() {
     <p className="preview-feedback" role="status">{feedback}</p>
     <section className="preview-stage" aria-label="Desktop overlay preview"><div className="preview-stage-label">Desktop workspace</div>{ready ? state === "HIDDEN" ? <div className="preview-hidden">Overlay hidden</div> : <div className="preview-overlay"><OverlayRoot inference={inference} handlers={{
       onGoalSelected: (goal: GoalCandidate) => setFeedback(`Selected goal: ${goal.title}`),
-      onConfirmGapStart: async () => { setFeedback("Gap confirmation clicked — no gap API request was sent."); return gap ?? getGapPreviewData(); },
-      onApproval: async (_actionId, status) => { setFeedback(`Approval ${status === "COMPLETED" ? "accepted" : "rejected"} — no approval request was sent.`); },
+      onConfirmGapStart: async () => { setFeedback("Gap confirmation clicked — no gap API request was sent."); },
+      onApproval: async (_actionId, decision) => { setFeedback(`Approval ${decision === "APPROVE" ? "accepted" : "rejected"} — no approval request was sent.`); },
       onOpenMain: (screen) => setFeedback(`Detail request for Main Window screen: ${screen}`),
     }} /></div> : <div className="preview-loading">Loading mock overlay data…</div>}</section>
     <p className="preview-note">Native always-on-top, frameless, and desktop positioning behavior cannot be verified until Member 1&apos;s Tauri integration is complete.</p>

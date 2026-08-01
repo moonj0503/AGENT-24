@@ -43,6 +43,7 @@ export interface ConfirmationBridgeDependencies {
   readonly snoozeDurationMs: number;
   readonly onError: (message: string) => void;
   readonly onStateChanged?: () => void;
+  readonly onGoalConfirmed?: (goal: Goal) => void;
 }
 
 function parsedRequest(value: unknown): GoalConfirmationRequested | undefined {
@@ -237,6 +238,7 @@ export class GoalConfirmationBridge {
 
   private async completeConfirmation(goal: Goal): Promise<Goal> {
     setConfirmedGoal(goal);
+    this.dependencies.onGoalConfirmed?.(goal);
     this.dependencies.controller.clearSnooze();
     this.snoozedUntil = undefined;
     if (this.snoozeTimer !== undefined) clearTimeout(this.snoozeTimer);
