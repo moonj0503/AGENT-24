@@ -20,8 +20,8 @@ if (root) void getWindowLabel().then(async (label) => {
     createRoot(root).render(<StrictMode><OverlayPreview /></StrictMode>);
     return;
   }
-  const observationWorkflow = createDesktopObservationWorkflow();
+  const observationWorkflow = await createDesktopObservationWorkflow();
   observationWorkflow.start();
-  window.addEventListener("beforeunload", () => observationWorkflow.stop(), { once: true });
+  window.addEventListener("beforeunload", () => { void observationWorkflow.shutdown(); }, { once: true });
   createRoot(root).render(<StrictMode><App /></StrictMode>);
 });
