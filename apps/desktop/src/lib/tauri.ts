@@ -138,7 +138,15 @@ export async function openMainWindow(screen: MainScreen): Promise<boolean> {
   return false;
 }
 
-export async function listenForTauriEvent<N extends TauriEventName>(name: N, handler: (payload: TauriEventPayloads[N]) => void): Promise<() => void> {
+
+export async function openRawApiStreamWindow(): Promise<boolean> {
+  if (isNativeOverlayAvailable()) {
+    await invokeNative("show_raw_api_stream_window");
+    return true;
+  }
+  if (typeof window !== "undefined") window.open("?window=raw-api-stream", "raw-api-stream");
+  return false;
+}export async function listenForTauriEvent<N extends TauriEventName>(name: N, handler: (payload: TauriEventPayloads[N]) => void): Promise<() => void> {
   const unsubscribe = await window.__TAURI__?.event?.listen?.(name, (event) => {
     const payload = parseTauriEventPayload(name, event.payload);
     if (payload !== undefined || name === TAURI_EVENTS.DISMISS) handler(payload as TauriEventPayloads[N]);

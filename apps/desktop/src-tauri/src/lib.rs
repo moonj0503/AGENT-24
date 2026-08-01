@@ -4,7 +4,20 @@ pub mod privacy;
 pub mod observer;
 pub mod platform;
 pub mod storage;
+
 use tauri::Manager;
+
+pub const RAW_API_STREAM_WINDOW_LABEL: &str = "raw-api-stream";
+
+#[tauri::command]
+fn show_raw_api_stream_window(app: tauri::AppHandle) -> Result<(), String> {
+    let window = app
+        .get_webview_window(RAW_API_STREAM_WINDOW_LABEL)
+        .ok_or_else(|| "Raw API Stream window is not configured".to_string())?;
+    window.show().map_err(|error| error.to_string())?;
+    window.set_focus().map_err(|error| error.to_string())
+}
+
 pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
@@ -34,8 +47,19 @@ pub fn run() {
             commands::overlay::show_overlay,
             commands::overlay::hide_overlay,
             commands::overlay::position_overlay,
-            commands::overlay::open_main_window
+            commands::overlay::open_main_window,
+            show_raw_api_stream_window
         ])
         .run(tauri::generate_context!())
         .expect("run Tauri application");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::RAW_API_STREAM_WINDOW_LABEL;
+
+    #[test]
+    fn raw_api_stream_window_label_is_stable() {
+        assert_eq!(RAW_API_STREAM_WINDOW_LABEL, "raw-api-stream");
+    }
 }

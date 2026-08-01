@@ -4,15 +4,16 @@
   "version": "0.1.0",
   "identifier": "com.continuity.desktop",
   "build": {
-  "beforeDevCommand": "pnpm dev",
-  "beforeBuildCommand": "pnpm build",
-  "devUrl": "http://localhost:5173",
-  "frontendDist": "../dist"
+    "beforeDevCommand": "pnpm dev",
+    "beforeBuildCommand": "pnpm build",
+    "devUrl": "http://localhost:5173",
+    "frontendDist": "../dist"
   },
   "app": {
     "withGlobalTauri": true,
     "windows": [
       { "label": "main", "title": "Continuity", "width": 1200, "height": 800 },
+      { "label": "raw-api-stream", "title": "Raw API Stream", "url": "index.html?window=raw-api-stream", "width": 680, "height": 800, "visible": false },
       { "label": "quick-overlay", "title": "Continuity", "url": "index.html?window=quick-overlay", "width": 360, "height": 520, "visible": false, "decorations": false, "transparent": true, "shadow": false, "alwaysOnTop": true, "skipTaskbar": true, "resizable": false }
     ]
   }
