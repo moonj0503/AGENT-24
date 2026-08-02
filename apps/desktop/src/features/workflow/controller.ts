@@ -17,6 +17,7 @@ const defaults: DesktopWorkflowControllerDependencies = { createCheckpoint, crea
 
 export class DesktopWorkflowController {
   private starting?: Promise<void>;
+  private executing?: Promise<void>;
   private ending?: Promise<RecoveryBrief>;
   constructor(workSessionId: string, confirmedGoal?: Goal, private readonly dependencies = defaults) {
     setDesktopWorkflowState({ workSessionId, confirmedGoal, actionResults: [], artifacts: [], phase: confirmedGoal ? "READY_FOR_GAP" : "OBSERVING", pending: false });
@@ -56,7 +57,21 @@ export class DesktopWorkflowController {
       const checkpoint = current.checkpoint ?? await this.dependencies.createCheckpoint(goal, inference);
       patchDesktopWorkflowState({ checkpoint });
       const gapSession = current.gapSession ?? await this.dependencies.createGapSession(current.workSessionId, goal.goalId, checkpoint.checkpointId);
-      patchDesktopWorkflowState({ gapSession });
+      patchDesktopWorkflowState({ gapSession, phase: "GAP_ACTIVE", pending: false });
+    } catch {
+      patchDesktopWorkflowState({ phase: "FAILED", pending: false, error: "Gap Mode could not start. Your confirmed Goal and completed setup were preserved." });
+      throw new Error("Gap Mode could not start.");
+    }
+  }
+  private executeGapActions(): Promise<void> {
+    this.executing ??= this.executeGapActionsOnce().finally(() => { this.executing = undefined; });
+    return this.executing;
+  }
+  private async executeGapActionsOnce(): Promise<void> {
+    const current = getDesktopWorkflowState();
+    const gapSession = current.gapSession;
+    if (!gapSession) throw new Error("There is no active Gap to execute.");
+    try {
       const approvals = await listApprovedTextFiles();
       const approved = approvals.find((item) => item.scope === "GAP") ?? approvals.find((item) => item.scope === "ALWAYS");
       const fileContext = approved ? await readApprovedTextFile(approved.authorizationId) : undefined;
@@ -71,8 +86,8 @@ export class DesktopWorkflowController {
       }
       if (approved?.scope === "GAP") await revokeTextFileAuthorization(approved.authorizationId);
     } catch {
-      patchDesktopWorkflowState({ phase: "FAILED", pending: false, error: "Gap Mode could not start. Your confirmed Goal and completed setup were preserved." });
-      throw new Error("Gap Mode could not start.");
+      patchDesktopWorkflowState({ phase: "FAILED", pending: false, error: "Gap actions could not complete. The approved file was not changed unless a successful edit was recorded." });
+      throw new Error("Gap actions could not complete.");
     }
   }
   async decideAction(actionId: string, decision: "APPROVE" | "REJECT", executionResult?: import("@continuity/contracts").ActionResult): Promise<void> {
@@ -90,11 +105,16 @@ export class DesktopWorkflowController {
     return this.ending;
   }
   private async endGapOnce(): Promise<RecoveryBrief> {
-    const state = getDesktopWorkflowState();
+    let state = getDesktopWorkflowState();
     if (!state.gapSession) throw new Error("There is no active Gap to end.");
+    const gapId = state.gapSession.gapId;
     patchDesktopWorkflowState({ phase: "ENDING_GAP", pending: true, error: undefined });
     try {
-      const gapSession = await this.dependencies.endGapSession(state.gapSession.gapId);
+      if (!state.actionPlan || !state.recoveryBrief) {
+        await this.executeGapActions();
+        state = getDesktopWorkflowState();
+      }
+      const gapSession = await this.dependencies.endGapSession(gapId);
       const recoveryBrief = state.recoveryBrief ?? await this.dependencies.fetchRecoveryBrief(gapSession.gapId);
       patchDesktopWorkflowState({ gapSession, recoveryBrief, phase: "RECOVERY_READY", pending: false });
       return recoveryBrief;

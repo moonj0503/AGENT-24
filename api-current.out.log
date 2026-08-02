@@ -1,0 +1,29 @@
+
+> @continuity/api@0.1.0 dev
+> node --env-file-if-exists=../../.env --import tsx --watch src/server.ts
+
+Restarting 'src/server.ts'
+Restarting 'src/server.ts'
+Failed running 'src/server.ts'. Waiting for file changes before restarting...
+Restarting 'src/server.ts'
+Failed running 'src/server.ts'. Waiting for file changes before restarting...
+Restarting 'src/server.ts'
+Restarting 'src/server.ts'
+Restarting 'src/server.ts'
+Restarting 'src/server.ts'
+Failed running 'src/server.ts'. Waiting for file changes before restarting...
+Restarting 'src/server.ts'
+Failed running 'src/server.ts'. Waiting for file changes before restarting...
+Restarting 'src/server.ts'
+Failed running 'src/server.ts'. Waiting for file changes before restarting...
+Restarting 'src/server.ts'
+Failed running 'src/server.ts'. Waiting for file changes before restarting...
+Restarting 'src/server.ts'
+Restarting 'src/server.ts'
+Restarting 'src/server.ts'
+Restarting 'src/server.ts'
+Failed running 'src/server.ts'. Waiting for file changes before restarting...
+Restarting 'src/server.ts'
+Failed running 'src/server.ts'. Waiting for file changes before restarting...
+Restarting 'src/server.ts'
+Failed running 'src/server.ts'. Waiting for file changes before restarting...

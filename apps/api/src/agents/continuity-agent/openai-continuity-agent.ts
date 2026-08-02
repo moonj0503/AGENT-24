@@ -77,6 +77,7 @@ function validatePlanSemantics(plan: ActionPlan, input: ContinuityContext): void
   }
 
   const actionIds = new Set<string>();
+  let approvedFileEditCount = 0;
   for (const action of plan.actions) {
     if (actionIds.has(action.actionId)) {
       throw new ContinuityAgentValidationError(
@@ -86,6 +87,7 @@ function validatePlanSemantics(plan: ActionPlan, input: ContinuityContext): void
     actionIds.add(action.actionId);
 
     if (action.type === "EDIT_APPROVED_TEXT_FILE") {
+      approvedFileEditCount += 1;
       const approved = input.approvedTextFile;
       if (!approved || !action.textEdit || action.textEdit.authorizationId !== approved.authorizationId) {
         throw new ContinuityAgentValidationError("OpenAI text edits must preserve the supplied file authorizationId.");
@@ -102,6 +104,9 @@ function validatePlanSemantics(plan: ActionPlan, input: ContinuityContext): void
       );
     }
   }
+  if (input.approvedTextFile && approvedFileEditCount !== 1) {
+    throw new ContinuityAgentValidationError("OpenAI action plans must contain exactly one edit for the approved text file.");
+  }
 }
 
 export class OpenAIContinuityAgent implements ContinuityAgent {
@@ -116,36 +121,45 @@ export class OpenAIContinuityAgent implements ContinuityAgent {
   }
 
   async run(input: ContinuityContext): Promise<ActionPlan> {
-    let output: unknown;
-    try {
-      output = await this.planningModel.generate({
-        model: this.model,
-        instructions: CONTINUITY_AGENT_INSTRUCTIONS,
-        input: serializeContinuityContext(input),
-      });
-    } catch (error) {
-      if (
-        error instanceof ContinuityAgentRequestError ||
-        error instanceof ContinuityAgentParseError
-      ) {
-        throw error;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      let output: unknown;
+      try {
+        output = await this.planningModel.generate({
+          model: this.model,
+          instructions: attempt === 0
+            ? CONTINUITY_AGENT_INSTRUCTIONS
+            : `${CONTINUITY_AGENT_INSTRUCTIONS}\nRetry the plan. The previous approved-file proposal was invalid; preserve the exact authorizationId and use a find value that occurs exactly once.`,
+          input: serializeContinuityContext(input),
+        });
+      } catch (error) {
+        if (
+          error instanceof ContinuityAgentRequestError ||
+          error instanceof ContinuityAgentParseError
+        ) {
+          throw error;
+        }
+        throw new ContinuityAgentRequestError();
       }
-      throw new ContinuityAgentRequestError();
-    }
 
-    if (output === null || output === undefined || output === "") {
-      throw new ContinuityAgentEmptyResponseError();
-    }
+      if (output === null || output === undefined || output === "") {
+        throw new ContinuityAgentEmptyResponseError();
+      }
 
-    const result = ActionPlanSchema.safeParse(output);
-    if (!result.success) {
-      throw new ContinuityAgentValidationError(
-        "OpenAI action-plan output failed contract validation.",
-      );
-    }
+      const result = ActionPlanSchema.safeParse(output);
+      if (!result.success) {
+        throw new ContinuityAgentValidationError(
+          "OpenAI action-plan output failed contract validation.",
+        );
+      }
 
-    validatePlanSemantics(result.data, input);
-    return result.data;
+      try {
+        validatePlanSemantics(result.data, input);
+        return result.data;
+      } catch (error) {
+        if (!(error instanceof ContinuityAgentValidationError) || !input.approvedTextFile || attempt === 1) throw error;
+      }
+    }
+    throw new ContinuityAgentValidationError("OpenAI approved-file planning failed validation.");
   }
 }
 
